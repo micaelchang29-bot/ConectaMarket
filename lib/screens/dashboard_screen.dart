@@ -409,43 +409,150 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 32),
 
-            // --- 3. SECCIÓN: MOVIMIENTOS RECIENTES (Original) ---
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE1E3E4)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          "Movimientos Recientes",
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+            // --- 3. SECCIÓN: MOVIMIENTOS RECIENTES (Lista Dinámica) ---
+            const Text(
+              "Movimientos Recientes",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
+            ),
+            const SizedBox(height: 16),
+
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: DashboardAiService().getRecentMovements(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: const Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "Error cargando movimientos: ${snapshot.error}",
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFBA1A1A)),
                       ),
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text("Ver todos", style: TextStyle(color: Color(0xFF005440))),
+                    ),
+                  );
+                }
+
+                final movements = snapshot.data ?? [];
+
+                if (movements.isEmpty) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        "No hay movimientos registrados",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF3F4944)),
                       ),
-                    ],
+                    ),
+                  );
+                }
+
+                return Container(
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE1E3E4)),
                   ),
-                  const SizedBox(height: 16),
-                  _buildMovementItem("+12 Inca Kola 500ml", "Hoy, 10:45 AM", Icons.add, const Color(0xFFE8F5E9), const Color(0xFF005440), true),
-                  _buildMovementItem("-5 Galletas Oreo", "Hoy, 09:15 AM", Icons.remove, const Color(0xFFFFEBEE), const Color(0xFFC62828), true),
-                  _buildMovementItem("+24 Agua Cielo 1L", "Ayer, 04:30 PM", Icons.add, const Color(0xFFE8F5E9), const Color(0xFF005440), false),
-                ],
-              ),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(0),
+                    itemCount: movements.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFE1E3E4), indent: 56),
+                    itemBuilder: (context, index) {
+                      final movement = movements[index];
+                      final String productName = movement['nombre'] ?? '—';
+                      final double cantidad = (movement['cantidad'] as num?)?.toDouble() ?? 0;
+                      final String fecha = movement['fecha'] ?? '—';
+                      final int tipoMovimiento = (movement['tipomovimiento'] as num?)?.toInt() ?? 0;
+
+                      bool isEntrada = tipoMovimiento == 0;
+                      Color bgIcon = isEntrada ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE);
+                      Color colorIcon = isEntrada ? const Color(0xFF005440) : const Color(0xFFC62828);
+                      IconData icon = isEntrada ? Icons.add : Icons.remove;
+
+                      String displayText = isEntrada
+                          ? "+${cantidad.toStringAsFixed(0)} $productName"
+                          : "-${cantidad.toStringAsFixed(0)} $productName";
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(color: bgIcon, shape: BoxShape.circle),
+                                    child: Icon(icon, color: colorIcon, size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          displayText,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF191C1D),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          fecha,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF3F4944),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.cloud_done_outlined,
+                              color: const Color(0xFFBEC9C3),
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
 
-            // --- 4. SECCIÓN: ALERTAS DE STOCK + PRESCRIPCIÓN IA (Unificado del Panel Lateral) ---
+            // --- 4. SECCIÓN: ALERTAS DE STOCK (Lista Dinámica) ---
             Row(
               children: [
                 const Icon(Icons.warning_amber_rounded, color: Color(0xFFBA1A1A)),
@@ -460,42 +567,159 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
-            // FutureBuilder que inyecta la inteligencia prescriptiva sobre tus alertas originales
-            FutureBuilder<Map<String, dynamic>>(
-              future: DashboardAiService().getInventoryInsight(),
+
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: DashboardAiService().getLowStockAlerts(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));
                 }
-                
-                final data = snapshot.data;
-                final bool hasSuggestedProvider = data != null && data['suggested_provider'] != null;
 
-                return Column(
-                  children: [
-                    // Alerta Crítica 1 (Leche Gloria) con sugerencia IA cruzada desde SQLite
-                    _buildAlertCard(
-                      title: "Leche Gloria Evaporada",
-                      subtitle: "Solo quedan 2 unidades",
-                      backgroundColor: const Color(0xFFFFDAD6),
-                      textColor: const Color(0xFF93000a),
-                      icon: Icons.error,
-                      iaPrescription: hasSuggestedProvider 
-                          ? "Sugerencia IA: Comprar a ${data['suggested_provider']} (Costo Proyectado: S/. ${data['estimated_cost']})"
-                          : null,
+                if (snapshot.hasError) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFEF5350)),
                     ),
-                    const SizedBox(height: 12),
-                    // Alerta Preventiva 2 (Arroz Costeño)
-                    _buildAlertCard(
-                      title: "Arroz Costeño 1kg",
-                      subtitle: "Stock bajo (5 unidades)",
-                      backgroundColor: const Color(0xFFFFDCBB),
-                      textColor: const Color(0xFF704200),
-                      icon: Icons.warning,
-                      iaPrescription: null, // Ejemplo sin prescripción calculada todavía
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Color(0xFFBA1A1A)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "Error cargando alertas: ${snapshot.error}",
+                            style: const TextStyle(fontSize: 12, color: Color(0xFFBA1A1A)),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  );
+                }
+
+                final lowStockProducts = snapshot.data ?? [];
+
+                if (lowStockProducts.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFC8E6C9)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: Color(0xFF2E7D32)),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            "Todos los productos tienen stock saludable",
+                            style: TextStyle(fontSize: 12, color: Color(0xFF2E7D32)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return Container(
+                  height: 400,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE1E3E4)),
+                  ),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(0),
+                    itemCount: lowStockProducts.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFE1E3E4), indent: 56),
+                    itemBuilder: (context, index) {
+                      final product = lowStockProducts[index];
+                      final String productName = product['nombre'] ?? '—';
+                      final double stock = (product['stock'] as num?)?.toDouble() ?? 0;
+                      final int umbralAlerta = (product['umbralAlerta'] as num?)?.toInt() ?? 5;
+                      final int unidadesFaltantes = (product['unidadesFaltantes'] as num?)?.toInt() ?? 0;
+                      final String estadoStock = product['estadoStock'] ?? 'Bajo';
+
+                      Color backgroundColor;
+                      Color textColor;
+                      IconData icon;
+
+                      if (estadoStock == 'Agotado') {
+                        backgroundColor = const Color(0xFFFFDAD6);
+                        textColor = const Color(0xFF93000a);
+                        icon = Icons.error;
+                      } else if (estadoStock == 'Crítico') {
+                        backgroundColor = const Color(0xFFFFDAD6);
+                        textColor = const Color(0xFFBA1A1A);
+                        icon = Icons.warning;
+                      } else {
+                        backgroundColor = const Color(0xFFFFDCBB);
+                        textColor = const Color(0xFF704200);
+                        icon = Icons.info_outline;
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: backgroundColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(icon, color: textColor, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    productName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF191C1D),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Stock: ${stock.toStringAsFixed(0)} / Umbral: $umbralAlerta (Faltan: $unidadesFaltantes)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: textColor.withValues(alpha: 0.8),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: backgroundColor,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                estadoStock,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
             ),

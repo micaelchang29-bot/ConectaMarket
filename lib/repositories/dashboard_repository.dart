@@ -6,7 +6,33 @@ class DashboardRepository {
   /// Extrae físicamente los productos que se encuentran bajo su umbral de alerta
   Future<List<Map<String, dynamic>>> getRawCriticalProducts() async {
     final db = await _dbHelper.database;
-    return await db.query('products', where: 'stock <= umbralAlerta');
+    return await db.rawQuery('''
+      SELECT id, nombre, stock, umbralAlerta
+      FROM products
+      WHERE stock <= umbralAlerta
+      ORDER BY stock ASC
+    ''');
+  }
+
+  /// Obtiene todos los productos con stock bajo con información adicional
+  Future<List<Map<String, dynamic>>> getLowStockProducts() async {
+    final db = await _dbHelper.database;
+    return await db.rawQuery('''
+      SELECT
+        id,
+        nombre,
+        stock,
+        umbralAlerta,
+        CAST(umbralAlerta - stock as INTEGER) as unidadesFaltantes,
+        CASE
+          WHEN stock = 0 THEN 'Agotado'
+          WHEN stock <= umbralAlerta * 0.25 THEN 'Crítico'
+          ELSE 'Bajo'
+        END as estadoStock
+      FROM products
+      WHERE stock <= umbralAlerta
+      ORDER BY stock ASC
+    ''');
   }
 
   /// Ejecuta la consulta relacional con un INNER JOIN agrupado cronológicamente
@@ -127,5 +153,25 @@ class DashboardRepository {
       print('Error en getMostProfitableProductByMonth: $e');
       return null;
     }
+  }
+
+  /// Obtiene los movimientos recientes de inventario (últimas 50 transacciones)
+  Future<List<Map<String, dynamic>>> getRecentMovements({int limit = 50}) async {
+    final db = await _dbHelper.database;
+    return await db.rawQuery('''
+      SELECT
+        ri.id,
+        ri.product_id,
+        p.nombre,
+        ri.cantidad,
+        r.fecha,
+        r.tipomovimiento,
+        ri.costoUnitario
+      FROM receipt_items ri
+      INNER JOIN receipts r ON ri.receipt_id = r.id
+      INNER JOIN products p ON ri.product_id = p.id
+      ORDER BY r.fecha DESC
+      LIMIT ?
+    ''', [limit]);
   }
 }

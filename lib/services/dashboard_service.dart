@@ -45,6 +45,19 @@ class DashboardAiService {
   }
 
   // ==========================================================
+  // 4. MOTOR DE ALERTAS DE STOCK (LISTA DINÁMICA)
+  // ==========================================================
+  Future<List<Map<String, dynamic>>> getLowStockAlerts() async {
+    try {
+      final lowStockProducts = await _dashboardRepo.getLowStockProducts();
+      return lowStockProducts;
+    } catch (e) {
+      print('Error en getLowStockAlerts: $e');
+      return [];
+    }
+  }
+
+  // ==========================================================
   // 2. MOTOR PREDICTIVO (MODELO MATEMÁTICO PURO)
   // ==========================================================
   Future<List<double>> predictWeeklyDemand(String productId) async {
@@ -124,6 +137,19 @@ class DashboardAiService {
         'most_profitable': {},
         'error': e.toString(),
       };
+    }
+  }
+
+  // ==========================================================
+  // 5. MOTOR DE MOVIMIENTOS RECIENTES
+  // ==========================================================
+  Future<List<Map<String, dynamic>>> getRecentMovements() async {
+    try {
+      final movements = await _dashboardRepo.getRecentMovements();
+      return movements;
+    } catch (e) {
+      print('Error en getRecentMovements: $e');
+      return [];
     }
   }
 }
