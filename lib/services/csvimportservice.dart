@@ -50,15 +50,21 @@ class CsvImportService {
     for (var i = 1; i < fields.length; i++) {
       final row = fields[i];
       final rId = row[0].toString(); // receipt_id
-
+      
       // 1. Si no existe la cabecera en nuestro mapa, la creamos
       if (!receiptsMap.containsKey(rId)) {
+        // Extraemos el valor y validamos si viene vacío o como texto nulo
+        final String rawProviderId = row[1].toString().trim();
+        final String? cleanedProviderId = (rawProviderId.isEmpty || rawProviderId == 'null') 
+            ? null 
+            : rawProviderId;
+
         receiptsMap[rId] = Receipt(
           id: rId,
-          providerId: row[1].toString(),
+          providerId: cleanedProviderId, // <--- Ahora pasará un null real si es una venta, evitando el fallo de FOREIGN KEY
           fecha: row[2].toString(),
           total: (row[3] as num).toDouble(),
-          tipomovimiento: row[4] == 1, // 1 es compra, 0 es venta
+          tipomovimiento: row[4] == 1, 
         );
         itemsMap[rId] = [];
       }
@@ -88,4 +94,5 @@ class CsvImportService {
     // 4. Refrescar el catálogo de productos
     await ProductService().refreshProducts();
   }
+  
 }

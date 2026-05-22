@@ -1,5 +1,5 @@
-import 'package:conectamarket/screens/catalog.dart';
-import 'package:conectamarket/screens/dashboard.dart';
+import 'package:conectamarket/screens/products_list_screen.dart';
+import 'package:conectamarket/screens/dashboard_screen.dart';
 import 'package:conectamarket/screens/receipts_list.dart';
 import 'package:conectamarket/screens/product_details_screen.dart';
 import 'package:conectamarket/screens/csvimportscreen.dart';
@@ -29,7 +29,7 @@ final GoRouter router = GoRouter(
         GoRoute(path: '/catalog', builder: (context, state) => CatalogScreen()),
         GoRoute(path: '/dashboard', builder: (context, state) => DashboardScreen()),
         GoRoute(path: '/receipts', builder: (context, state) => ReceiptListScreen()),
-        GoRoute(path: '/providers', builder: (context, state) => const ProviderListScreen()),
+        GoRoute(path: '/providers', builder: (context, state) => ProviderListScreen()),
       ],
     ),
     GoRoute(

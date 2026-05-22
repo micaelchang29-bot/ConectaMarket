@@ -84,4 +84,32 @@ class ReceiptRepository {
       whereArgs: [id],
     );
   }
+
+  // 5. Eliminar Todos los Recibos y Detalles
+  Future<void> deleteAllReceipts() async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      await txn.delete('receipt_items');
+      await txn.delete('receipts');
+    });
+  }
+
+  /// Extrae el desglose relacional de ítems comprados y vendidos acotados
+  /// en un rango de fechas para el cálculo preciso del balance financiero.
+  Future<List<Map<String, dynamic>>> getDetailedBalanceItemsInRange(String startDate, String endDate) async {
+    final db = await _dbHelper.database;
+
+    return await db.rawQuery('''
+      SELECT
+        date(r.fecha) as fecha,
+        r.tipomovimiento,
+        ri.cantidad,
+        ri.costoUnitario
+      FROM receipt_items ri
+      INNER JOIN receipts r ON ri.receipt_id = r.id
+      WHERE date(r.fecha) >= date(?) AND date(r.fecha) <= date(?)
+      ORDER BY date(r.fecha) ASC
+    ''', [startDate, endDate]);
+  }
+
 }

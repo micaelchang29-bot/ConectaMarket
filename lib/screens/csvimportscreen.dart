@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/csvimportservice.dart';
+import '../services/product_service.dart';
+import '../services/receipt_service.dart';
 import '../widgets_global/header_bar.dart';
 
 class ImportCsvScreen extends StatefulWidget {
@@ -62,16 +64,68 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
     }
-  }
+    }
+    }
 
-  @override
-  Widget build(BuildContext context) {
+    Future<void> _clearDatabase() async {
+    final entityName = _selectedIndex == 0 ? "productos" : "comprobantes";
+    final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirmar'),
+      content: Text('¿Seguro que deseas eliminar todos los $entityName?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+    _isLoading = true;
+    });
+
+    try {
+    if (_selectedIndex == 0) {
+      await ProductService().deleteAllProducts();
+    } else {
+      await ReceiptService().deleteAllReceipts();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${_selectedIndex == 0 ? "Productos" : "Comprobantes"} eliminados correctamente')),
+      );
+    }
+    } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al eliminar: $e')),
+      );
+    }
+    } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+    }
+    }
+
+    @override  Widget build(BuildContext context) {
     return Scaffold(
       appBar: HeaderBarWidget(
         title: "Importar Datos",
@@ -137,23 +191,41 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: ElevatedButton(
-            onPressed: (_fileName == null || _isLoading) ? null : _importData,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              backgroundColor: const Color(0xFF005440),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed: (_fileName == null || _isLoading) ? null : _importData,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  backgroundColor: const Color(0xFF005440),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isLoading 
+                    ? const SizedBox(
+                        width: 24, 
+                        height: 24, 
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                      )
+                    : const Text("Confirmar Importación", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            ),
-            child: _isLoading 
-                ? const SizedBox(
-                    width: 24, 
-                    height: 24, 
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                  )
-                : const Text("Confirmar Importación", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _isLoading ? null : _clearDatabase,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text("Limpiar Base de Datos", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
         ),
       ),
@@ -164,7 +236,15 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
     final isSelected = _selectedIndex == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedIndex = index),
+        onTap: () {
+          if (_selectedIndex != index) {
+            setState(() {
+              _selectedIndex = index;
+              _fileName = null;
+              _filePath = null;
+            });
+          }
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(

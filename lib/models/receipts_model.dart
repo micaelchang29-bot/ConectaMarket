@@ -1,6 +1,6 @@
 class Receipt {
   final String id;
-  final String providerId;
+  final String? providerId;
   final String fecha;
   final double total;
   final bool tipomovimiento; // 0=venta, 1=compra

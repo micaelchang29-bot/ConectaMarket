@@ -42,6 +42,11 @@ class ProductService {
     await refreshProducts(); // Notificar a la UI
   }
 
+  Future<void> deleteAllProducts() async {
+    await _repo.deleteAllProducts();
+    await refreshProducts(); // Notificar a la UI
+  }
+
   // Específico para el Middleware de POS
   Future<void> syncProductFromPos(Product product) async {
     // Añadir lógica específica de sincronización aquí, 

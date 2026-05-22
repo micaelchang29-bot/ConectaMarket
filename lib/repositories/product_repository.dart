@@ -36,6 +36,12 @@ class ProductRepository {
     );
   }
 
+  // Eliminar todos los productos
+  Future<void> deleteAllProducts() async {
+    final db = await _dbHelper.database;
+    await db.delete('products');
+  }
+
   // Obtener productos críticos (según umbral)
   Future<List<Product>> getLowStockProducts() async {
     final db = await _dbHelper.database;
