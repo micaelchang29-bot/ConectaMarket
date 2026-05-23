@@ -152,4 +152,48 @@ class DashboardAiService {
       return [];
     }
   }
+
+  // ==========================================================
+  // 6. ML PAIR 1: CLASIFICACIÓN DE RIESGO DE INVENTARIO
+  // ==========================================================
+  Future<List<Map<String, dynamic>>> getInventoryRiskClassification() async {
+    try {
+      final riskMetrics = await _dashboardRepo.getInventoryRiskMetrics();
+      return riskMetrics;
+    } catch (e) {
+      print('Error en getInventoryRiskClassification: $e');
+      return [];
+    }
+  }
+
+  // ==========================================================
+  // 7. ML PAIR PROVIDERS: RANKING Y SCORE DE CONFIABILIDAD
+  // ==========================================================
+  Future<List<Map<String, dynamic>>> getProviderRanking() async {
+    try {
+      return await _dashboardRepo.getProviderRanking();
+    } catch (e) {
+      print('Error en getProviderRanking: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getProvidersForProduct(String productId) async {
+    try {
+      return await _dashboardRepo.getProvidersForProduct(productId);
+    } catch (e) {
+      print('Error en getProvidersForProduct: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getRecommendedProvider(String productId) async {
+    try {
+      final providers = await _dashboardRepo.getProvidersForProduct(productId);
+      return providers.isNotEmpty ? providers.first : null;
+    } catch (e) {
+      print('Error en getRecommendedProvider: $e');
+      return null;
+    }
+  }
 }

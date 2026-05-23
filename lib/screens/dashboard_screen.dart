@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/receipt_service.dart';
 import '../../widgets_global/month_selector_widget.dart';
+import 'stock_chat_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -87,6 +88,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(width: 8),
         ],
+      ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const StockChatScreen()),
+        ),
+        backgroundColor: const Color(0xFF0F6E56),
+        icon: const Icon(Icons.psychology_outlined, color: Colors.white),
+        label: const Text(
+          'Consultar IA',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
       ),
 
       // --- MAIN CONTENT AREA (Scroll Vertical Infinito) ---
@@ -223,6 +236,179 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 32),
+
+            // --- 1.6. SECCIÓN: ESTADO DE INVENTARIO (ML Pair 1 - Risk Classification) ---
+            const Text(
+              "Estado de Inventario (IA)",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
+            ),
+            const SizedBox(height: 16),
+
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: DashboardAiService().getInventoryRiskClassification(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: const Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "Error cargando estado: ${snapshot.error}",
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFBA1A1A)),
+                      ),
+                    ),
+                  );
+                }
+
+                final riskMetrics = snapshot.data ?? [];
+
+                if (riskMetrics.isEmpty) {
+                  return Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E3E4)),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        "No hay productos registrados",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF3F4944)),
+                      ),
+                    ),
+                  );
+                }
+
+                return Container(
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE1E3E4)),
+                  ),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(0),
+                    itemCount: riskMetrics.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFE1E3E4)),
+                    itemBuilder: (context, index) {
+                      final metric = riskMetrics[index];
+                      final String productName = metric['nombre'] ?? '—';
+                      final double stock = (metric['stock'] as num?)?.toDouble() ?? 0;
+                      final int rotationDays = (metric['rotation_days'] as num?)?.toInt() ?? 0;
+                      final String riskLevel = metric['risk_level'] ?? 'DESCONOCIDO';
+
+                      Color backgroundColor;
+                      Color textColor;
+                      Color badgeColor;
+                      IconData icon;
+
+                      switch (riskLevel) {
+                        case 'BAJO':
+                          backgroundColor = const Color(0xFFE8F5E9);
+                          textColor = const Color(0xFF2E7D32);
+                          badgeColor = const Color(0xFF4CAF50);
+                          icon = Icons.check_circle;
+                          break;
+                        case 'MEDIO':
+                          backgroundColor = const Color(0xFFFFF3E0);
+                          textColor = const Color(0xFFF57F17);
+                          badgeColor = const Color(0xFFFFB74D);
+                          icon = Icons.info;
+                          break;
+                        case 'ALTO':
+                          backgroundColor = const Color(0xFFFFDCBB);
+                          textColor = const Color(0xFF704200);
+                          badgeColor = const Color(0xFFFFB74D);
+                          icon = Icons.warning;
+                          break;
+                        default: // CRÍTICO
+                          backgroundColor = const Color(0xFFFFDAD6);
+                          textColor = const Color(0xFF93000a);
+                          badgeColor = const Color(0xFFBA1A1A);
+                          icon = Icons.error;
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: backgroundColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(icon, color: textColor, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    productName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF191C1D),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Stock: ${stock.toStringAsFixed(0)} / Cobertura: $rotationDays días',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: textColor.withValues(alpha: 0.8),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withValues(alpha: 0.2),
+                                border: Border.all(color: badgeColor),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                riskLevel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: badgeColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
 
@@ -404,6 +590,147 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: const Color(0xFF005440),
                     ),
                   ],
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+
+            // --- 2.7. SECCIÓN: TOP PROVEEDORES (ML Pair Providers) ---
+            const Text(
+              "Top Proveedores (IA)",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
+            ),
+            const SizedBox(height: 16),
+
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: DashboardAiService().getProviderRanking(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final providers = snapshot.data ?? [];
+
+                if (providers.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFFB74D)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Color(0xFFF57F17)),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "No hay histórico de proveedores en los últimos 12 meses",
+                            style: TextStyle(fontSize: 12, color: Color(0xFF704200)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final int displayCount = providers.length > 4 ? 4 : providers.length;
+                final List<String> medals = ['🥇', '🥈', '🥉', '⭐'];
+                final List<Color> bgColors = [
+                  const Color(0xFFFFEAD6),
+                  const Color(0xFFEDEDED),
+                  const Color(0xFFFFF3CD),
+                  const Color(0xFFE8EAF6),
+                ];
+                final List<Color> textColors = [
+                  const Color(0xFF805100),
+                  const Color(0xFF424242),
+                  const Color(0xFF856404),
+                  const Color(0xFF283593),
+                ];
+
+                return GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.0,
+                  children: List.generate(displayCount, (index) {
+                    final provider = providers[index];
+                    final String name = provider['nombre'] ?? '—';
+                    final int score = (provider['global_score'] as num?)?.toInt() ?? 0;
+                    final String recommendation = provider['recommendation'] ?? '';
+                    final int compras = (provider['num_compras'] as num?)?.toInt() ?? 0;
+                    final Color bg = bgColors[index];
+                    final Color tc = textColors[index];
+
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: tc.withValues(alpha: 0.2)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: tc,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                medals[index],
+                                style: const TextStyle(fontSize: 18),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "$score/100",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: tc,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                recommendation,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: tc.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "$compras compras",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: tc.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 );
               },
             ),
