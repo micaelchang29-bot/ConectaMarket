@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "506258400957",
+    "project_id": "device-streaming-3b2e9e07",
+    "storage_bucket": "device-streaming-3b2e9e07.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:506258400957:android:145cf5d00fc4573556b9d4",
+        "android_client_info": {
+          "package_name": "com.example.conectamarket"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCd4eNr8o0GMQwTi9PGJN1X_EbYHiZvBwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/receipt_service.dart';
+import '../../widgets_global/login_dialog.dart';
 import '../../widgets_global/month_selector_widget.dart';
 import 'stock_chat_screen.dart';
 
@@ -45,10 +47,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(color: Color(0xFF005440), fontWeight: FontWeight.bold, fontSize: 18),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    "Hola, Ricardo",
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
+                  StreamBuilder(
+                    stream: AuthService.instance.userStream,
+                    builder: (context, snapshot) {
+                      final name = snapshot.data?.displayName ?? snapshot.data?.email ?? 'Invitado';
+                      return Text(
+                        'Hola, $name',
+                        style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
                   ),
                 ],
               ),
@@ -84,6 +92,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.sync, color: Color(0xFF005440)),
             onPressed: () {
               // Simulación o gatillo de actualización de la caché relacional
+            },
+          ),
+          StreamBuilder(
+            stream: AuthService.instance.userStream,
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+              if (user != null) {
+                return IconButton(
+                  icon: const Icon(Icons.logout, color: Color(0xFF005440)),
+                  tooltip: 'Cerrar sesión',
+                  onPressed: () => AuthService.instance.logout(),
+                );
+              }
+              return IconButton(
+                icon: const Icon(Icons.person_outline, color: Color(0xFF005440)),
+                tooltip: 'Iniciar sesión',
+                onPressed: () => LoginDialog.show(context),
+              );
             },
           ),
           const SizedBox(width: 8),

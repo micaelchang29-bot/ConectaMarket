@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'ai_chat_interface.dart';
 
 class ClaudeService implements AiChatService {
-  static const String _apiKey = 'YOUR_CLAUDE_API_KEY_HERE';
+  static const String _apiKey = String.fromEnvironment('CLAUDE_API_KEY');
   static const String _model = 'claude-haiku-4-5-20251001';
 
   @override

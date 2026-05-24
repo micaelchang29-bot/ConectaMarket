@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'ai_chat_interface.dart';
 
 class GeminiService implements AiChatService {
-  static const String _apiKey = 'AIzaSyA5KORgDz_80KozVmvZQdZsANZSO1aXw_w';
-  static const String _model = 'gemini-1.5-flash';
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const String _model = 'gemini-2.0-flash';
 
   @override
   Future<String> ask(String question, String context) async {

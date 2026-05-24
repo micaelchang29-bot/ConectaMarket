@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/ai_chat/ai_factory.dart';
+import '../services/auth_service.dart';
 import '../services/dashboard_service.dart';
+import '../widgets_global/login_dialog.dart';
 
 class StockChatScreen extends StatefulWidget {
   const StockChatScreen({super.key});
@@ -64,6 +66,11 @@ class _StockChatScreenState extends State<StockChatScreen> {
   Future<void> _sendQuestion() async {
     final question = _controller.text.trim();
     if (question.isEmpty || _isLoading) return;
+
+    if (AuthService.instance.currentUser == null) {
+      final authenticated = await LoginDialog.show(context);
+      if (!authenticated) return;
+    }
 
     _controller.clear();
     setState(() {

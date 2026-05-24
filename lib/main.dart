@@ -1,13 +1,13 @@
 import 'package:conectamarket/repositories/database_helper.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:conectamarket/screens/router.dart'; // Asegura esta ruta
+import 'package:conectamarket/screens/router.dart';
+import 'firebase_options.dart';
 
-void main() async{
-// 1. Asegura que los bindings de Flutter estén listos
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Inicializa la base de datos antes de arrancar la App
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await DatabaseHelper.instance.database;
 
   runApp(const ConectaMarketApp());
