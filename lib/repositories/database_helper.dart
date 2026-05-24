@@ -19,8 +19,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -53,6 +54,7 @@ class DatabaseHelper {
         fecha TEXT,
         total REAL,
         tipomovimiento INTEGER DEFAULT 0,
+        synced INTEGER DEFAULT 0,
         FOREIGN KEY (provider_id) REFERENCES providers(id)
       )
     ''');
@@ -69,6 +71,12 @@ class DatabaseHelper {
         FOREIGN KEY (product_id) REFERENCES products(id)
       )
     ''');
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE receipts ADD COLUMN synced INTEGER DEFAULT 0');
+    }
   }
 
   Future close() async {

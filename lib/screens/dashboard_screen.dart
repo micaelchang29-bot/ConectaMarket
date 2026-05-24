@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/receipt_service.dart';
+import '../../services/sync_service.dart';
 import '../../widgets_global/login_dialog.dart';
 import '../../widgets_global/month_selector_widget.dart';
 import 'stock_chat_screen.dart';
@@ -15,10 +16,35 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ID de producto de muestra para renderizar el gráfico predictivo de la tesis
   final String _sampleProductId = 'PROD-ARROZ-01';
   int _selectedYear = 2026;
   int _selectedMonth = 5;
+  bool _isSyncing = false;
+
+  Future<void> _runBackup() async {
+    if (AuthService.instance.currentUser == null) {
+      final authenticated = await LoginDialog.show(context);
+      if (!authenticated) return;
+    }
+
+    setState(() => _isSyncing = true);
+    final result = await SyncService.instance.backup();
+    if (!mounted) return;
+    setState(() => _isSyncing = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: result.success ? const Color(0xFF0F6E56) : const Color(0xFFBA1A1A),
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          result.success
+              ? 'Backup exitoso · ${result.movementsSynced} movimiento${result.movementsSynced == 1 ? '' : 's'} sincronizado${result.movementsSynced == 1 ? '' : 's'}'
+              : 'Error al sincronizar: ${result.error}',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +115,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.sync, color: Color(0xFF005440)),
-            onPressed: () {
-              // Simulación o gatillo de actualización de la caché relacional
-            },
+            icon: _isSyncing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF005440)),
+                    ),
+                  )
+                : const Icon(Icons.cloud_upload_outlined, color: Color(0xFF005440)),
+            tooltip: 'Hacer backup',
+            onPressed: _isSyncing ? null : _runBackup,
           ),
           StreamBuilder(
             stream: AuthService.instance.userStream,
