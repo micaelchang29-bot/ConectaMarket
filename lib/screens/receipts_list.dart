@@ -39,6 +39,15 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
               title: "Comprobantes",
               badgeCount: count,
               showBackButton: false,
+              actions: !_mostrarCompras
+                  ? [
+                      IconButton(
+                        icon: const Icon(Icons.description_outlined),
+                        tooltip: 'Exportar SUNAT',
+                        onPressed: () => context.push('/sunat-export'),
+                      ),
+                    ]
+                  : null,
             );
           },
         ),

@@ -5,6 +5,7 @@ import 'package:conectamarket/screens/product_details_screen.dart';
 import 'package:conectamarket/screens/csvimportscreen.dart';
 import 'package:conectamarket/screens/receipt_details_screen.dart';
 import 'package:conectamarket/screens/provider_list_screen.dart';
+import 'package:conectamarket/screens/sunat_export_screen.dart';
 import 'package:conectamarket/models/products_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
 import 'package:conectamarket/widgets_global/navigation_bar.dart';
@@ -49,6 +50,10 @@ final GoRouter router = GoRouter(
         final receipt = state.extra as Receipt?;
         return ReceiptDetailsScreen(receipt: receipt);
       },
+    ),
+    GoRoute(
+      path: '/sunat-export',
+      builder: (context, state) => const SunatExportScreen(),
     ),
   ],
 );

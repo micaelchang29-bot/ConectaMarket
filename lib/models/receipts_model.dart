@@ -3,14 +3,16 @@ class Receipt {
   final String? providerId;
   final String fecha;
   final double total;
-  final bool tipomovimiento; // 0=venta, 1=compra
+  final bool tipomovimiento; // false=venta, true=compra
+  final String serie;
 
   Receipt({
-    required this.id, 
-    required this.providerId, 
-    required this.fecha, 
-    required this.total, 
+    required this.id,
+    required this.providerId,
+    required this.fecha,
+    required this.total,
     this.tipomovimiento = false,
+    this.serie = 'B001',
   });
 
   Map<String, dynamic> toMap() => {
@@ -19,6 +21,7 @@ class Receipt {
     'fecha': fecha,
     'total': total,
     'tipomovimiento': tipomovimiento ? 1 : 0,
+    'serie': serie,
   };
 
   factory Receipt.fromMap(Map<String, dynamic> map) => Receipt(
@@ -27,5 +30,6 @@ class Receipt {
     fecha: map['fecha'],
     total: map['total'],
     tipomovimiento: (map['tipomovimiento'] ?? 0) == 1,
+    serie: map['serie'] ?? 'B001',
   );
 }

@@ -94,6 +94,18 @@ class ReceiptRepository {
     });
   }
 
+  Future<List<Map<String, dynamic>>> getSalesForPeriod(String startDate, String endDate) async {
+    final db = await _dbHelper.database;
+    return await db.rawQuery('''
+      SELECT id, serie, fecha, total
+      FROM receipts
+      WHERE tipomovimiento = 0
+        AND date(fecha) >= date(?)
+        AND date(fecha) <= date(?)
+      ORDER BY date(fecha) ASC
+    ''', [startDate, endDate]);
+  }
+
   /// Extrae el desglose relacional de ítems comprados y vendidos acotados
   /// en un rango de fechas para el cálculo preciso del balance financiero.
   Future<List<Map<String, dynamic>>> getDetailedBalanceItemsInRange(String startDate, String endDate) async {

@@ -59,12 +59,14 @@ class CsvImportService {
             ? null 
             : rawProviderId;
 
+        final String rawSerie = row.length > 8 ? row[8].toString().trim() : '';
         receiptsMap[rId] = Receipt(
           id: rId,
-          providerId: cleanedProviderId, // <--- Ahora pasará un null real si es una venta, evitando el fallo de FOREIGN KEY
+          providerId: cleanedProviderId,
           fecha: row[2].toString(),
           total: (row[3] as num).toDouble(),
-          tipomovimiento: row[4] == 1, 
+          tipomovimiento: row[4] == 1,
+          serie: rawSerie.isEmpty ? 'B001' : rawSerie,
         );
         itemsMap[rId] = [];
       }

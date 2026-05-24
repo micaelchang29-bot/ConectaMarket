@@ -28,6 +28,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
   List<ReceiptItem> _items = [];
   bool _isLoadingDetails = false;
   late String _currentReceiptId;
+  late String _serie;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
     _isCompra = hasReceipt ? widget.receipt!.tipomovimiento : false;
     _fechaOperacion = hasReceipt ? DateTime.parse(widget.receipt!.fecha) : DateTime.now();
     _providerController = TextEditingController(text: hasReceipt ? widget.receipt!.providerId : '');
+    _serie = widget.receipt?.serie ?? 'B001';
 
     if (hasReceipt) {
       _fetchInitialDetails();
@@ -142,6 +144,39 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                       child: ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
+                          Row(
+                            children: [
+                              const Text("SERIE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE8F5E9),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFC8E6C9)),
+                                ),
+                                child: Text(
+                                  _serie,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text("N° COMPROBANTE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  _currentReceiptId,
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF3F4944)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           const Text("FECHA DE MOVIMIENTO", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 6),
                           InkWell(
