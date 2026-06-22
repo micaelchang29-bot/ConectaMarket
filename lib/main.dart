@@ -2,7 +2,7 @@ import 'package:conectamarket/repositories/database_helper.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:conectamarket/screens/router.dart';
+import 'package:conectamarket/navigation/router.dart';
 import 'firebase_options.dart';
 
 void main() async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/providers_model.dart';
 import '../../services/provider_service.dart';
 import '../../widgets_global/header_bar.dart';
@@ -69,7 +70,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
             backgroundColor: const Color(0xFF005440),
           ),
         );
-        Navigator.pop(context); // Regresa al catálogo refrescado
+        context.pop(); // Regresa al catálogo refrescado
       }
     } catch (e) {
       // Captura el throw Exception de longitud o prefijo incorrecto (10,15,17,20)
@@ -87,7 +88,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
       // --- HEADER (TopAppBar Contextual) ---
       appBar: HeaderBarWidget(
         title: _isEditMode ? "Editar Proveedor" : "Nuevo Proveedor",
-        onBack: () => Navigator.pop(context),
+        onBack: () => context.pop(),
       ),
 
       // --- MAIN CONTENT (Scrollable Form) ---
@@ -235,7 +236,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
                     side: const BorderSide(color: Color(0xFF6F7A74)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => context.pop(),
                   child: const Text("Cancelar", style: TextStyle(color: Color(0xFF005440), fontWeight: FontWeight.w600)),
                 ),
               ),

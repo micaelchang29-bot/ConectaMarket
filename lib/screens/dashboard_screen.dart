@@ -9,7 +9,7 @@ import '../../widgets_global/dashboard/featured_products_section.dart';
 import '../../widgets_global/dashboard/provider_ranking_section.dart';
 import '../../widgets_global/dashboard/recent_movements_section.dart';
 import '../../widgets_global/dashboard/stock_alerts_section.dart';
-import 'stock_chat_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -147,9 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const StockChatScreen()),
-        ),
+        onPressed: () => context.push('/stock-chat'),
         backgroundColor: const Color(0xFF0F6E56),
         icon: const Icon(Icons.psychology_outlined, color: Colors.white),
         label: const Text('Consultar IA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),

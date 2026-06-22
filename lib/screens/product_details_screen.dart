@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/products_model.dart';
 import '../../services/product_service.dart';
 import '../../widgets_global/header_bar.dart';
@@ -52,7 +53,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
 
     await _service.saveProduct(newProduct);
-    if (mounted) Navigator.pop(context);
+    if (mounted) context.pop();
   }
 
   InputDecoration _inputDecoration(String label) {
@@ -80,14 +81,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: HeaderBarWidget(
         title: isEditing ? "Editar Producto" : "Nuevo Producto",
-        onBack: () => Navigator.pop(context),
+        onBack: () => context.pop(),
         actions: [
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
               onPressed: () async {
                 await _service.deleteProduct(widget.product!.id);
-                if (mounted) Navigator.pop(context);
+                if (mounted) context.pop();
               },
             )
         ],
@@ -154,7 +155,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     side: const BorderSide(color: Color(0xFF6F7A74)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => context.pop(),
                   child: const Text("Cancelar", style: TextStyle(color: Color(0xFF005440), fontWeight: FontWeight.w600)),
                 ),
               ),

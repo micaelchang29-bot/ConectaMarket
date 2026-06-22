@@ -5,9 +5,12 @@ import 'package:conectamarket/screens/product_details_screen.dart';
 import 'package:conectamarket/screens/csvimportscreen.dart';
 import 'package:conectamarket/screens/receipt_details_screen.dart';
 import 'package:conectamarket/screens/provider_list_screen.dart';
+import 'package:conectamarket/screens/provider_details_screen.dart';
 import 'package:conectamarket/screens/sunat_export_screen.dart';
+import 'package:conectamarket/screens/stock_chat_screen.dart';
 import 'package:conectamarket/models/products_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
+import 'package:conectamarket/models/providers_model.dart';
 import 'package:conectamarket/widgets_global/navigation_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +57,17 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/sunat-export',
       builder: (context, state) => const SunatExportScreen(),
+    ),
+    GoRoute(
+      path: '/provider-details',
+      builder: (context, state) {
+        final provider = state.extra as Provider?;
+        return ProviderDetailsScreen(provider: provider);
+      },
+    ),
+    GoRoute(
+      path: '/stock-chat',
+      builder: (context, state) => const StockChatScreen(),
     ),
   ],
 );

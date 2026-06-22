@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/receipts_model.dart';
 import '../../models/receipt_items_model.dart';
@@ -94,7 +95,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
 
       if (mounted) {
         _showNotification("Movimiento procesado con éxito");
-        Navigator.pop(context);
+        context.pop();
       }
     } catch (e) {
       _showNotification("Error al procesar: $e", isError: true);
@@ -119,7 +120,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: HeaderBarWidget(
         title: isEditing ? "Detalle Movimiento" : "Registrar Movimiento",
-        onBack: () => Navigator.pop(context),
+        onBack: () => context.pop(),
         actions: [
           if (isEditing)
             IconButton(
@@ -127,7 +128,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
               onPressed: () async {
                 await _receiptService.deleteReceipt(widget.receipt!.id);
                 await ProductService().refreshProducts();
-                if (mounted) Navigator.pop(context);
+                if (mounted) context.pop();
               },
             ),
         ],

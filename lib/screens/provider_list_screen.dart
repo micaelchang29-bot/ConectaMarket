@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/providers_model.dart';
 import '../../services/provider_service.dart';
-import 'provider_details_screen.dart'; // Tu pantalla completa de detalles
+import 'package:go_router/go_router.dart';
 import '../../widgets_global/header_bar.dart';
 
 class ProviderListScreen extends StatefulWidget {
@@ -157,12 +157,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProviderDetailsScreen(provider: provider),
-                              ),
-                            );
+                            context.push('/provider-details', extra: provider);
                           },
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
@@ -230,13 +225,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                                     IconButton(
                                       icon: const Icon(Icons.edit_outlined, color: Color(0xFF6F7A74)),
                                       onPressed: () {
-                                        // Navegación declarativa limpia pasándole la data al constructor
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => ProviderDetailsScreen(provider: provider),
-                                          ),
-                                        );
+                                        context.push('/provider-details', extra: provider);
                                       },
                                     ),
                                     IconButton(
@@ -265,13 +254,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: () {
-          // Navegación en Modo Creación (Pasando null)
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ProviderDetailsScreen(provider: null),
-            ),
-          );
+          context.push('/provider-details');
         },
         child: const Icon(Icons.add, size: 28),
       ),
