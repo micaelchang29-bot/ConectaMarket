@@ -75,14 +75,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
               title: "Mis Proveedores",
               badgeCount: count,
               showBackButton: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.sync, color: Color(0xFF3F4944)),
-                  onPressed: () async {
-                    await ProviderService().refreshProviders();
-                  },
-                ),
-              ],
+              actions: [],
             );
           },
         ),

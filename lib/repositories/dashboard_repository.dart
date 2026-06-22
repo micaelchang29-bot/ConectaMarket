@@ -40,14 +40,14 @@ class DashboardRepository {
   Future<List<Map<String, dynamic>>> getRawSalesHistory(String productId) async {
     final db = await _dbHelper.database;
     return await db.rawQuery('''
-      SELECT 
-        r.fecha as date,
+      SELECT
+        DATE(r.fecha) as date,
         SUM(ri.cantidad) as total_qty
       FROM receipt_items ri
       INNER JOIN receipts r ON ri.receipt_id = r.id
       WHERE ri.product_id = ? AND r.tipomovimiento = 0
-      GROUP BY r.fecha
-      ORDER BY r.fecha ASC
+      GROUP BY DATE(r.fecha)
+      ORDER BY DATE(r.fecha) ASC
     ''', [productId]);
   }
 
@@ -298,6 +298,18 @@ class DashboardRepository {
     ''', [productId, productId]);
   }
 
+  /// Retorna id y nombre de todos los productos
+  Future<List<Map<String, dynamic>>> getAllProducts() async {
+    final db = await _dbHelper.database;
+    return await db.rawQuery('SELECT id, nombre FROM products');
+  }
+
+  /// Retorna id, nombre, stock y umbralAlerta de todos los productos para el motor de riesgo
+  Future<List<Map<String, dynamic>>> getAllProductsWithStock() async {
+    final db = await _dbHelper.database;
+    return await db.rawQuery('SELECT id, nombre, stock, umbralAlerta FROM products');
+  }
+
   /// ML Pair 1: Calcula métricas de rotación e inventario para clasificación de riesgo
   Future<List<Map<String, dynamic>>> getInventoryRiskMetrics() async {
     final db = await _dbHelper.database;
@@ -320,17 +332,17 @@ class DashboardRepository {
         p.stock,
         p.umbralAlerta,
         COALESCE(ds.avg_daily_qty, 1.0) as avg_daily_qty,
-        CAST(COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) as INTEGER) as rotation_days,
+        CAST(p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) as INTEGER) as rotation_days,
         CASE
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) > 20 THEN 'BAJO'
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) BETWEEN 7 AND 20 THEN 'MEDIO'
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) BETWEEN 2 AND 7 THEN 'ALTO'
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) > 15 THEN 'BAJO'
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) BETWEEN 8 AND 15 THEN 'MEDIO'
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) BETWEEN 4 AND 7 THEN 'ALTO'
           ELSE 'CRÍTICO'
         END as risk_level,
         CASE
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) > 20 THEN 0
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) BETWEEN 7 AND 20 THEN 1
-          WHEN COALESCE(p.stock / NULLIF(ds.avg_daily_qty, 0), 0) BETWEEN 2 AND 7 THEN 2
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) > 15 THEN 0
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) BETWEEN 8 AND 15 THEN 1
+          WHEN p.stock / NULLIF(COALESCE(ds.avg_daily_qty, 1.0), 0) BETWEEN 4 AND 7 THEN 2
           ELSE 3
         END as risk_score
       FROM products p

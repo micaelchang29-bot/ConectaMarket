@@ -9,7 +9,6 @@ import '../../widgets_global/dashboard/featured_products_section.dart';
 import '../../widgets_global/dashboard/provider_ranking_section.dart';
 import '../../widgets_global/dashboard/recent_movements_section.dart';
 import '../../widgets_global/dashboard/stock_alerts_section.dart';
-import '../../widgets_global/dashboard/demand_forecast_section.dart';
 import 'stock_chat_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -20,7 +19,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final String _sampleProductId = 'PROD-ARROZ-01';
   bool _isSyncing = false;
 
   Future<void> _runBackup() async {
@@ -163,12 +161,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const FinancialBalanceCard(),
             const SizedBox(height: 32),
 
-            const Text("Estado de Inventario (IA)",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D))),
-            const SizedBox(height: 16),
-            const InventoryRiskSection(),
-            const SizedBox(height: 32),
-
             FeaturedProductsSection(
               title: "Productos Destacados",
               future: DashboardAiService().getProductInsights(),
@@ -180,12 +172,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               future: DashboardAiService().getLastMonthProductInsights(),
               emptyMessage: "No hay datos del mes anterior",
             ),
-            const SizedBox(height: 32),
-
-            const Text("Top Proveedores (IA)",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D))),
-            const SizedBox(height: 16),
-            const ProviderRankingSection(),
             const SizedBox(height: 32),
 
             const Text("Movimientos Recientes",
@@ -209,18 +195,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const StockAlertsSection(),
             const SizedBox(height: 32),
 
-            const Divider(color: Color(0xFFE1E3E4), thickness: 1),
-            const SizedBox(height: 16),
-            const Text("Tendencia de Demanda Proyectada (7 días)",
+            const Text("Top Proveedores (IA)",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D))),
-            const SizedBox(height: 4),
-            const Text(
-              "Inferencia algorítmica estacional calculada localmente (Edge ML)",
-              style: TextStyle(fontSize: 13, color: Color(0xFF3F4944), fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 20),
-            DemandForecastSection(productId: _sampleProductId),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            const ProviderRankingSection(),
+            const SizedBox(height: 32),
+
+            const Text("Estado de Inventario (IA)",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D))),
+            const SizedBox(height: 16),
+            const InventoryRiskSection(),
+            const SizedBox(height: 32),
+
+            const SizedBox(height: 8),
           ],
         ),
       ),

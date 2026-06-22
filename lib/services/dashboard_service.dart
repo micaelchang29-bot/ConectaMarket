@@ -66,31 +66,11 @@ class DashboardAiService {
         await _dashboardRepo.getRawSalesHistory(productId);
 
     if (salesHistory.length < 3) {
-      return [2.0, 2.0, 3.0, 2.0, 4.0, 3.0, 5.0]; // Baseline estática
+      return [2.0, 2.0, 3.0, 2.0, 4.0, 3.0, 5.0, 2.0, 3.0, 2.0, 4.0, 3.0, 2.0, 3.0]; // Baseline estática
     }
 
-    // El servicio procesa el vector numérico puro en RAM
-    List<double> historicalData = salesHistory.map((row) => (row['total_qty'] as num).toDouble()).toList();
-
-    // --- ALGORITMO Holt: Inferencia en el Borde ---
-    double alpha = 0.4;
-    double beta = 0.3;
-    double level = historicalData[0];
-    double trend = historicalData[1] - historicalData[0];
-
-    for (int i = 1; i < historicalData.length; i++) {
-      double lastLevel = level;
-      level = (alpha * historicalData[i]) + ((1 - alpha) * (level + trend));
-      trend = (beta * (level - lastLevel)) + ((1 - beta) * trend);
-    }
-
-    List<double> predictions = [];
-    for (int horizon = 1; horizon <= 7; horizon++) {
-      double projectedDemand = level + (trend * horizon);
-      predictions.add(max(0.0, double.parse(projectedDemand.toStringAsFixed(1))));
-    }
-
-    return predictions;
+    final List<double> historicalData = salesHistory.map((row) => (row['total_qty'] as num).toDouble()).toList();
+    return _runHolt(historicalData, 14);
   }
 
   // ==========================================================
@@ -154,12 +134,66 @@ class DashboardAiService {
   }
 
   // ==========================================================
-  // 6. ML PAIR 1: CLASIFICACIÓN DE RIESGO DE INVENTARIO
+  // 6. ML PAIR 1: CLASIFICACIÓN DE RIESGO DE INVENTARIO (HOLT-DRIVEN)
+  // Solo incluye los productos predecibles (historial >= 17 días de venta),
+  // mismo umbral que validateForecastAccuracy. Los demás se omiten.
   // ==========================================================
   Future<List<Map<String, dynamic>>> getInventoryRiskClassification() async {
     try {
-      final riskMetrics = await _dashboardRepo.getInventoryRiskMetrics();
-      return riskMetrics;
+      final products = await _dashboardRepo.getAllProductsWithStock();
+      final List<Map<String, dynamic>> results = [];
+
+      for (final product in products) {
+        final String productId = product['id'] as String;
+        final double stock = (product['stock'] as num?)?.toDouble() ?? 0.0;
+
+        final history = await _dashboardRepo.getRawSalesHistory(productId);
+        if (history.length < 17) continue; // no predecible, misma regla que validación
+
+        final List<double> historicalData =
+            history.map((r) => (r['total_qty'] as num).toDouble()).toList();
+        final List<double> forecast = _runHolt(historicalData, 14);
+
+        final double avgPredictedDaily =
+            forecast.isNotEmpty ? forecast.reduce((a, b) => a + b) / forecast.length : 1.0;
+        final double rotationDays =
+            avgPredictedDaily > 0 ? stock / avgPredictedDaily : 9999.0;
+
+        final String riskLevel;
+        final int riskScore;
+        if (rotationDays > 15) {
+          riskLevel = 'BAJO';
+          riskScore = 0;
+        } else if (rotationDays >= 8) {
+          riskLevel = 'MEDIO';
+          riskScore = 1;
+        } else if (rotationDays >= 4) {
+          riskLevel = 'ALTO';
+          riskScore = 2;
+        } else {
+          riskLevel = 'CRÍTICO';
+          riskScore = 3;
+        }
+
+        results.add({
+          'id': productId,
+          'nombre': product['nombre'],
+          'stock': stock,
+          'umbralAlerta': product['umbralAlerta'],
+          'avg_daily_qty': avgPredictedDaily,
+          'rotation_days': rotationDays.toInt(),
+          'risk_level': riskLevel,
+          'risk_score': riskScore,
+        });
+      }
+
+      results.sort((a, b) {
+        final int scoreCmp = (b['risk_score'] as int).compareTo(a['risk_score'] as int);
+        if (scoreCmp != 0) return scoreCmp;
+        return (a['rotation_days'] as int).compareTo(b['rotation_days'] as int);
+      });
+
+      return results;
     } catch (e) {
       print('Error en getInventoryRiskClassification: $e');
       return [];
@@ -196,4 +230,107 @@ class DashboardAiService {
       return null;
     }
   }
+
+  // ==========================================================
+  // 8. VALIDACIÓN DEL MODELO (MAPE con train/test split)
+  // ==========================================================
+  List<double> _runHolt(List<double> data, int horizon,
+      {double alpha = 0.1, double beta = 0.1, double phi = 0.7}) {
+    double level = data[0];
+    double trend = data[1] - data[0];
+
+    for (int i = 1; i < data.length; i++) {
+      final double lastLevel = level;
+      level = (alpha * data[i]) + ((1 - alpha) * (level + phi * trend));
+      trend = (beta * (level - lastLevel)) + ((1 - beta) * phi * trend);
+    }
+
+    // forecast(h) = level + (phi + phi² + ... + phi^h) * trend
+    return List.generate(horizon, (h) {
+      double phiSum = 0;
+      double phiPow = phi;
+      for (int i = 0; i <= h; i++) {
+        phiSum += phiPow;
+        phiPow *= phi;
+      }
+      return max(0.0, level + phiSum * trend);
+    });
+  }
+
+  Future<Map<String, dynamic>> validateForecastAccuracy() async {
+    final stopwatch = Stopwatch()..start();
+    final products = await _dashboardRepo.getAllProducts();
+
+    final List<Map<String, dynamic>> productResults = [];
+    final List<double> allMapes = [];
+
+    for (final product in products) {
+      final String productId = product['id'] as String;
+      final String productName = product['nombre'] as String;
+
+      final history = await _dashboardRepo.getRawSalesHistory(productId);
+      if (history.length < 17) continue;
+
+      final trainHistory = history.sublist(0, history.length - 14);
+      if (trainHistory.isEmpty) continue;
+
+      final DateTime lastTrainDate = DateTime.parse(trainHistory.last['date'] as String);
+      final DateTime windowStart = lastTrainDate.subtract(const Duration(days: 41));
+      final List<Map<String, dynamic>> windowRows = trainHistory
+          .where((r) => !DateTime.parse(r['date'] as String).isBefore(windowStart))
+          .toList();
+      final int saleDaysInWindow = windowRows.length;
+      if (saleDaysInWindow < 17) continue;
+
+      // Syntetos-Boylan: mismo criterio que el pipeline de refinamiento
+      final double totalQtyWindow = windowRows.fold(0.0, (s, r) => s + (r['total_qty'] as num).toDouble());
+      final double adi = 42.0 / saleDaysInWindow;
+      final List<double> qtys = windowRows.map((r) => (r['total_qty'] as num).toDouble()).toList();
+      final double meanQty = totalQtyWindow / qtys.length;
+      double cv2 = 0;
+      if (meanQty > 0 && qtys.length > 1) {
+        final double variance = qtys.map((q) => (q - meanQty) * (q - meanQty)).reduce((a, b) => a + b) / qtys.length;
+        cv2 = variance / (meanQty * meanQty);
+      }
+      if (adi >= 1.32 || cv2 >= 0.49) continue;
+
+      final String clasificacion = saleDaysInWindow >= 42 ? 'predecible' : 'poco_frecuente';
+
+      final fullData = history.map((r) => (r['total_qty'] as num).toDouble()).toList();
+      final trainData = fullData.sublist(0, fullData.length - 14);
+      final testData = fullData.sublist(fullData.length - 14);
+
+      final predictions = _runHolt(trainData, 14);
+
+      final double totalReal = testData.reduce((a, b) => a + b);
+      if (totalReal == 0) continue;
+
+      final double totalPred = predictions.reduce((a, b) => a + b);
+      final double mape = ((totalReal - totalPred).abs() / totalReal) * 100;
+
+      allMapes.add(mape);
+      productResults.add({
+        'nombre': productName,
+        'mape': mape,
+        'real': totalReal,
+        'pred': totalPred,
+        'clasificacion': clasificacion,
+        'sale_days_window': saleDaysInWindow,
+      });
+    }
+
+    stopwatch.stop();
+
+    final double globalMape = allMapes.isEmpty
+        ? 0.0
+        : allMapes.reduce((a, b) => a + b) / allMapes.length;
+
+    return {
+      'global_mape': globalMape,
+      'latency_ms': stopwatch.elapsedMilliseconds,
+      'productos_evaluados': productResults.length,
+      'detalle': productResults,
+    };
+  }
+
 }

@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+String _formatAmount(double amount) {
+  final double abs = amount.abs();
+  final String sign = amount < 0 ? '-' : '';
+  if (abs >= 1000000) return '${sign}S/ ${(abs / 1000000).toStringAsFixed(1)}M';
+  if (abs >= 1000) return '${sign}S/ ${(abs / 1000).toStringAsFixed(1)}K';
+  return '${sign}S/ ${abs.toStringAsFixed(2)}';
+}
+
 Widget buildKpi(String label, double amount, Color color) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -7,9 +15,10 @@ Widget buildKpi(String label, double amount, Color color) {
       Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF3F4944)), overflow: TextOverflow.ellipsis),
       const SizedBox(height: 4),
       Text(
-        "S/ ${amount.toStringAsFixed(2)}",
+        _formatAmount(amount),
         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
         overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
     ],
   );
