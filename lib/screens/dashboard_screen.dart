@@ -27,8 +27,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!authenticated) return;
     }
 
+    if (!mounted) return;
+    // Pedir periodo
+    final months = await showDialog<int>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('¿Cuánto tiempo incluir en el backup?'),
+        children: [1, 3, 6, 12].map((m) => SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, m),
+          child: Text('Últimos $m ${m == 1 ? 'mes' : 'meses'}'),
+        )).toList(),
+      ),
+    );
+    if (months == null) return;
+
     setState(() => _isSyncing = true);
-    final result = await SyncService.instance.backup();
+    final result = await SyncService.instance.backup(months: months);
     if (!mounted) return;
     setState(() => _isSyncing = false);
 
@@ -38,12 +52,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
         behavior: SnackBarBehavior.floating,
         content: Text(
           result.success
-              ? 'Backup exitoso · ${result.movementsSynced} movimiento${result.movementsSynced == 1 ? '' : 's'} sincronizado${result.movementsSynced == 1 ? '' : 's'}'
-              : 'Error al sincronizar: ${result.error}',
+              ? () {
+                  final d = result.backupDate!;
+                  final fecha = '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+                  final hora = '${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}';
+                  return 'Backup exitoso · $fecha $hora · ${result.movementsSynced} movimiento${result.movementsSynced == 1 ? '' : 's'}';
+                }()
+              : 'Error al hacer backup: ${result.error}',
           style: const TextStyle(color: Colors.white),
         ),
       ),
     );
+  }
+
+  Future<void> _runRestore() async {
+    if (AuthService.instance.currentUser == null) {
+      final authenticated = await LoginDialog.show(context);
+      if (!authenticated) return;
+    }
+
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Restaurar backup'),
+        content: const Text(
+          'Esto reemplazará todos los datos locales con el último backup de la nube. '
+          'El inventario y los movimientos locales que no estén respaldados se perderán.\n\n'
+          '¿Continuar?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Restaurar', style: TextStyle(color: Color(0xFFBA1A1A))),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isSyncing = true);
+    final result = await SyncService.instance.restore();
+    if (!mounted) return;
+    setState(() => _isSyncing = false);
+
+    if (result.success) {
+      final dateStr = result.backupDate != null
+          ? '${result.backupDate!.day}/${result.backupDate!.month}/${result.backupDate!.year}'
+          : '—';
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Restauración completa'),
+          content: Text(
+            'Backup del $dateStr restaurado correctamente.\n\n'
+            '• ${result.productsRestored} producto${result.productsRestored == 1 ? '' : 's'}\n'
+            '• ${result.receiptsRestored} movimiento${result.receiptsRestored == 1 ? '' : 's'}',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Aceptar')),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFBA1A1A),
+          behavior: SnackBarBehavior.floating,
+          content: Text('Error al restaurar: ${result.error}', style: const TextStyle(color: Colors.white)),
+        ),
+      );
+    }
   }
 
   @override
@@ -124,6 +204,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 : const Icon(Icons.cloud_upload_outlined, color: Color(0xFF005440)),
             tooltip: 'Hacer backup',
             onPressed: _isSyncing ? null : _runBackup,
+          ),
+          IconButton(
+            icon: const Icon(Icons.cloud_download_outlined, color: Color(0xFF005440)),
+            tooltip: 'Restaurar backup',
+            onPressed: _isSyncing ? null : _runRestore,
           ),
           StreamBuilder(
             stream: AuthService.instance.userStream,

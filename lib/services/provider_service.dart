@@ -32,8 +32,8 @@ class ProviderService {
 
   // Lógica de negocio: Validar RUC (11 dígitos) antes de guardar
   Future<void> saveProvider(Provider provider) async {
-    if (provider.ruc != null && provider.ruc!.length != 11) {
-      throw Exception("El RUC debe tener exactamente 11 dígitos");
+    if (provider.ruc != null && !RegExp(r'^\d{11}$').hasMatch(provider.ruc!)) {
+      throw Exception("El RUC debe tener exactamente 11 dígitos numéricos");
     }
     
     await _repo.upsertProvider(provider);

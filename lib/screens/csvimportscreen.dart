@@ -35,27 +35,21 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
 
   Future<void> _importData() async {
     if (_filePath == null) return;
-    
-    setState(() {
-      _isLoading = true;
-    });
+
+    setState(() => _isLoading = true);
 
     try {
       final service = CsvImportService();
-      if (_selectedIndex == 0) {
-        await service.importProductsFromCsv(_filePath!);
-      } else {
-        await service.importReceiptsFromCsv(_filePath!);
-      }
-      
+      final result = _selectedIndex == 0
+          ? await service.importProductsFromCsv(_filePath!)
+          : await service.importReceiptsFromCsv(_filePath!);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Importación exitosa')),
-        );
         setState(() {
           _fileName = null;
           _filePath = null;
         });
+        _showImportSummary(result.imported, result.errors);
       }
     } catch (e) {
       if (mounted) {
@@ -64,13 +58,65 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
         );
       }
     } finally {
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
-    }
-    }
+  }
+
+  void _showImportSummary(int imported, List<String> errors) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Resumen de importación'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Color(0xFF005440)),
+                  const SizedBox(width: 8),
+                  Text('$imported fila(s) importadas correctamente'),
+                ],
+              ),
+              if (errors.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.warning, color: Color(0xFFBA1A1A)),
+                    const SizedBox(width: 8),
+                    Text('${errors.length} fila(s) con error:'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: errors.length,
+                    itemBuilder: (_, i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        errors[i],
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFBA1A1A)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
 
     Future<void> _clearDatabase() async {
     final entityName = _selectedIndex == 0 ? "productos" : "comprobantes";

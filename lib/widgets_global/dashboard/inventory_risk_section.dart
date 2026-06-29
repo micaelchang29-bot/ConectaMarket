@@ -48,6 +48,7 @@ class InventoryRiskSection extends StatelessWidget {
               final double stock = (metric['stock'] as num?)?.toDouble() ?? 0;
               final int rotationDays = (metric['rotation_days'] as num?)?.toInt() ?? 0;
               final String riskLevel = metric['risk_level'] ?? 'DESCONOCIDO';
+              final int suggestedQty = (metric['suggested_qty'] as num?)?.toInt() ?? 0;
 
               final (bgColor, textColor, badgeColor, icon) = _riskStyle(riskLevel);
 
@@ -77,6 +78,14 @@ class InventoryRiskSection extends StatelessWidget {
                             style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.8)),
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (suggestedQty > 0) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Comprar: $suggestedQty u. (cubre 30 días)',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
                       ),
                     ),

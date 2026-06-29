@@ -47,12 +47,30 @@ class ReceiptRepository {
         // 1 (true) es compra (aumenta stock), 0 (false) es venta (disminuye stock)
         final double newStock = receipt.tipomovimiento ? (currentStock + qty) : (currentStock - qty);
 
+        if (!receipt.tipomovimiento && newStock < 0) {
+          throw Exception(
+            "Stock insuficiente para '${productResult.first['nombre']}'. "
+            "Disponible: $currentStock, solicitado: $qty.",
+          );
+        }
+
         await txn.update(
           'products',
           {'stock': newStock},
           where: 'id = ?',
           whereArgs: [item.productId],
         );
+      }
+    });
+  }
+
+  // Restore: inserta recibo + items sin tocar el stock (el snapshot ya lo tiene correcto)
+  Future<void> insertReceiptForRestore(Map<String, dynamic> receipt, List<Map<String, dynamic>> items) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      await txn.insert('receipts', receipt, conflictAlgorithm: ConflictAlgorithm.replace);
+      for (final item in items) {
+        await txn.insert('receipt_items', item, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
   }

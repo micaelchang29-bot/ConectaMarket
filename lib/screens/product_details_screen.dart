@@ -87,6 +87,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
               onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Eliminar producto'),
+                    content: Text('¿Eliminar "${widget.product!.nombre}"? Esta acción no se puede deshacer.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
                 await _service.deleteProduct(widget.product!.id);
                 if (mounted) context.pop();
               },
@@ -118,7 +133,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (v) {
                   if (v!.isEmpty) return "Campo obligatorio";
-                  if (double.tryParse(v) == null) return "Debe ser un número válido";
+                  final n = double.tryParse(v);
+                  if (n == null) return "Debe ser un número válido";
+                  if (n < 0) return "El stock no puede ser negativo";
                   return null;
                 },
               ),

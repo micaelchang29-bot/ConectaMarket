@@ -175,6 +175,10 @@ class DashboardAiService {
           riskScore = 3;
         }
 
+        final int suggestedQty = riskLevel == 'BAJO'
+            ? 0
+            : ((30 - rotationDays) * avgPredictedDaily).ceil().clamp(0, 99999);
+
         results.add({
           'id': productId,
           'nombre': product['nombre'],
@@ -184,6 +188,7 @@ class DashboardAiService {
           'rotation_days': rotationDays.toInt(),
           'risk_level': riskLevel,
           'risk_score': riskScore,
+          'suggested_qty': suggestedQty,
         });
       }
 
