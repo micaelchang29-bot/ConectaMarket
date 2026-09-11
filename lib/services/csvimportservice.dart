@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:conectamarket/models/receipt_items_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
+import 'package:conectamarket/models/providers_model.dart';
 import 'package:conectamarket/repositories/receipt_repository.dart';
+import 'package:conectamarket/repositories/provider_repository.dart';
 import 'package:conectamarket/services/product_service.dart';
+import 'package:conectamarket/services/provider_service.dart';
 import 'package:csv/csv.dart';
 import '../../models/products_model.dart';
 import '../../repositories/product_repository.dart';
@@ -18,6 +21,7 @@ class CsvImportResult {
 class CsvImportService {
   final ProductRepository _repo = ProductRepository();
   final ReceiptRepository _receiptRepository = ReceiptRepository();
+  final ProviderRepository _providerRepository = ProviderRepository();
 
   Future<CsvImportResult> importProductsFromCsv(String filePath) async {
     final file = File(filePath);
@@ -35,8 +39,8 @@ class CsvImportService {
         final product = Product(
           id: row[0].toString(),
           nombre: row[1].toString(),
-          stock: (row[2] as num).toDouble(),
-          umbralAlerta: (row[3] as num).toInt(),
+          stock: num.parse(row[2].toString()).toDouble(),
+          umbralAlerta: num.parse(row[3].toString()).toInt(),
         );
 
         await _repo.upsertProduct(product);
@@ -59,36 +63,64 @@ class CsvImportService {
     Map<String, List<ReceiptItem>> itemsMap = {};
     final List<String> errors = [];
 
+    // Caché nombre -> id para no consultar la BD por cada fila y evitar duplicados
+    // cuando el mismo proveedor aparece en varias filas del CSV.
+    final Map<String, String> providerIdByName = {};
+    for (final p in await _providerRepository.getAllProviders()) {
+      providerIdByName[p.nombre.trim().toLowerCase()] = p.id;
+    }
+
     for (var i = 1; i < fields.length; i++) {
       try {
         final row = fields[i];
         if (row.length < 8) throw Exception('Columnas insuficientes (se esperan al menos 8)');
 
-        final rId = row[0].toString();
+        final String rawComprobante = row[0].toString();
+        final String rawProviderName = row[1].toString().trim();
+        String? providerId;
+
+        if (rawProviderName.isNotEmpty && rawProviderName != 'null' && rawProviderName != '0') {
+          final String key = rawProviderName.toLowerCase();
+          providerId = providerIdByName[key];
+
+          // El proveedor no existe todavía en la BD: se crea con ese nombre
+          // para que el recibo quede vinculado desde ya (y aparezca en el ranking).
+          if (providerId == null) {
+            final newProvider = Provider(
+              id: 'PROV-${DateTime.now().millisecondsSinceEpoch}-$i',
+              nombre: rawProviderName,
+            );
+            await _providerRepository.upsertProvider(newProvider);
+            providerId = newProvider.id;
+            providerIdByName[key] = providerId;
+          }
+        }
+
+        // El Nº de comprobante del CSV no es único globalmente (cada proveedor
+        // suele numerar sus propios comprobantes desde 1): se namespacea por
+        // proveedor para no fusionar compras de proveedores distintos bajo el
+        // mismo recibo.
+        final String rId = '${providerId ?? "SP"}_$rawComprobante';
 
         if (!receiptsMap.containsKey(rId)) {
-          final String rawProviderId = row[1].toString().trim();
-          final String? cleanedProviderId =
-              (rawProviderId.isEmpty || rawProviderId == 'null') ? null : rawProviderId;
-
           final String rawSerie = row.length > 8 ? row[8].toString().trim() : '';
           receiptsMap[rId] = Receipt(
-            id: rId,
-            providerId: cleanedProviderId,
+            id: 'REC-${DateTime.now().microsecondsSinceEpoch}-$i',
+            providerId: providerId,
             fecha: row[2].toString(),
-            total: (row[3] as num).toDouble(),
-            tipomovimiento: row[4] == 1,
+            total: num.parse(row[3].toString()).toDouble(),
+            tipomovimiento: row[4].toString().trim() == '1',
             serie: rawSerie.isEmpty ? 'B001' : rawSerie,
           );
           itemsMap[rId] = [];
         }
 
         itemsMap[rId]!.add(ReceiptItem(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
-          receiptId: rId,
+          id: '${DateTime.now().microsecondsSinceEpoch}-$i',
+          receiptId: receiptsMap[rId]!.id,
           productId: row[5].toString(),
-          cantidad: (row[6] as num).toDouble(),
-          costoUnitario: (row[7] as num).toDouble(),
+          cantidad: num.parse(row[6].toString()).toDouble(),
+          costoUnitario: num.parse(row[7].toString()).toDouble(),
         ));
       } catch (e) {
         errors.add('Fila ${i + 1}: $e');
@@ -108,6 +140,7 @@ class CsvImportService {
     }
 
     await ProductService().refreshProducts();
+    await ProviderService().refreshProviders();
     return CsvImportResult(imported: imported, errors: errors);
   }
 }

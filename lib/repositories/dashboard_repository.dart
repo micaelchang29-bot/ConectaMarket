@@ -196,7 +196,7 @@ class DashboardRepository {
         FROM receipt_items ri
         INNER JOIN receipts r ON ri.receipt_id = r.id
         INNER JOIN providers prov ON r.provider_id = prov.id
-        WHERE r.tipomovimiento = 0
+        WHERE r.tipomovimiento = 1
         AND r.fecha >= date('now', '-365 days')
         GROUP BY prov.id
       ),
@@ -262,7 +262,7 @@ class DashboardRepository {
         INNER JOIN receipts r ON ri.receipt_id = r.id
         INNER JOIN providers prov ON r.provider_id = prov.id
         INNER JOIN products p ON ri.product_id = p.id
-        WHERE r.tipomovimiento = 0
+        WHERE r.tipomovimiento = 1
         AND ri.product_id = ?
         AND r.fecha >= date('now', '-365 days')
         GROUP BY prov.id

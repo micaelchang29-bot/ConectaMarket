@@ -23,6 +23,21 @@ class ProviderRepository {
     return List.generate(maps.length, (i) => Provider.fromMap(maps[i]));
   }
 
+  // Obtener proveedor por nombre (case-insensitive, para vincular importaciones CSV)
+  Future<Provider?> getProviderByNombre(String nombre) async {
+    final db = await _dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'providers',
+      where: 'LOWER(nombre) = LOWER(?)',
+      whereArgs: [nombre.trim()],
+    );
+
+    if (maps.isNotEmpty) {
+      return Provider.fromMap(maps.first);
+    }
+    return null;
+  }
+
   // Obtener proveedor por ID
   Future<Provider?> getProviderById(String id) async {
     final db = await _dbHelper.database;
