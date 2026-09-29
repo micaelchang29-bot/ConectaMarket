@@ -49,6 +49,15 @@ class ProviderService {
   }
 
   Future<void> removeProvider(String id) async {
+    // Regla de negocio: un proveedor con compras registradas no se elimina,
+    // para no dejar recibos huerfanos sin proveedor identificable.
+    final int movimientos = await _repo.countReceiptsByProvider(id);
+    if (movimientos > 0) {
+      throw Exception(
+        "No se puede eliminar el proveedor: tiene $movimientos movimientos asociados.",
+      );
+    }
+
     await _repo.deleteProvider(id);
     await refreshProviders();
   }

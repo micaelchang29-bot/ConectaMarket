@@ -26,6 +26,16 @@ class ProductRepository {
     });
   }
 
+  // Contar movimientos (items de recibo) asociados a un producto
+  Future<int> countMovementsByProduct(String productId) async {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM receipt_items WHERE product_id = ?',
+      [productId],
+    );
+    return (result.first['total'] as num?)?.toInt() ?? 0;
+  }
+
   // Eliminar producto
   Future<void> deleteProduct(String id) async {
     final db = await _dbHelper.database;

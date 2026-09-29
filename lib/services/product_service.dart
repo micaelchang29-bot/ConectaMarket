@@ -38,6 +38,15 @@ class ProductService {
   }
 
   Future<void> deleteProduct(String id) async {
+    // Regla de negocio: un producto con historial de movimientos no se elimina,
+    // porque borrarlo dejaria recibos apuntando a un producto inexistente.
+    final int movimientos = await _repo.countMovementsByProduct(id);
+    if (movimientos > 0) {
+      throw Exception(
+        "No se puede eliminar el producto: tiene $movimientos movimientos asociados.",
+      );
+    }
+
     await _repo.deleteProduct(id);
     await refreshProducts(); // Notificar a la UI
   }

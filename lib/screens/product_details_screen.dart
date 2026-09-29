@@ -56,6 +56,39 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     if (mounted) context.pop();
   }
 
+  Future<void> _deleteProduct() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text('¿Eliminar "${widget.product!.nombre}"? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await _service.deleteProduct(widget.product!.id);
+      if (mounted) context.pop();
+    } catch (e) {
+      // El producto tiene movimientos asociados: se informa el motivo y se
+      // permanece en la pantalla en lugar de cerrarla.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: const Color(0xFFBA1A1A),
+        ),
+      );
+    }
+  }
+
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
@@ -86,25 +119,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Eliminar producto'),
-                    content: Text('¿Eliminar "${widget.product!.nombre}"? Esta acción no se puede deshacer.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm != true) return;
-                await _service.deleteProduct(widget.product!.id);
-                if (mounted) context.pop();
-              },
+              onPressed: _deleteProduct,
             )
         ],
       ),

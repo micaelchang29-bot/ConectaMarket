@@ -52,7 +52,10 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: const Color(0xFFBA1A1A)),
+            SnackBar(
+              content: Text(e.toString().replaceFirst('Exception: ', '')),
+              backgroundColor: const Color(0xFFBA1A1A),
+            ),
           );
         }
       }

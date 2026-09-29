@@ -53,6 +53,16 @@ class ProviderRepository {
     return null;
   }
 
+  // Contar recibos (movimientos) asociados a un proveedor
+  Future<int> countReceiptsByProvider(String providerId) async {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM receipts WHERE provider_id = ?',
+      [providerId],
+    );
+    return (result.first['total'] as num?)?.toInt() ?? 0;
+  }
+
   // Eliminar proveedor
   Future<void> deleteProvider(String id) async {
     final db = await _dbHelper.database;
