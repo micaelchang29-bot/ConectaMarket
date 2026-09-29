@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+
+  /// Ruta alternativa usada solo por las pruebas (por ejemplo
+  /// `inMemoryDatabasePath`). En produccion siempre es null.
+  static String? _overridePath;
 
   DatabaseHelper._init();
 
@@ -13,9 +18,26 @@ class DatabaseHelper {
     return _database!;
   }
 
+  /// Cierra la conexion en cache y apunta la base a [path] para la siguiente
+  /// apertura. Permite que cada prueba arranque con una base limpia.
+  @visibleForTesting
+  static Future<void> resetForTesting({String? path}) async {
+    final db = _database;
+    _database = null;
+    if (db != null && db.isOpen) {
+      await db.close();
+    }
+    _overridePath = path;
+  }
+
   Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
+    final String path;
+    if (_overridePath != null) {
+      path = _overridePath!;
+    } else {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, filePath);
+    }
 
     return await openDatabase(
       path,
