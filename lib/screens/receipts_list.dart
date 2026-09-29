@@ -33,6 +33,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: StreamBuilder<List<Receipt>>(
           stream: _service.receiptStream,
+          initialData: _service.cachedReceipts,
           builder: (context, snapshot) {
             final count = snapshot.data?.where((r) => r.tipomovimiento == _mostrarCompras).length ?? 0;
             return HeaderBarWidget(
@@ -87,6 +88,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
             Expanded(
               child: StreamBuilder<List<Receipt>>(
                 stream: _service.receiptStream,
+                initialData: _service.cachedReceipts,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                   

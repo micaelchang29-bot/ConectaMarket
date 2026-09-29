@@ -1,13 +1,56 @@
-import 'package:flutter/material.dart';
-import '../../services/dashboard_service.dart';
+import 'dart:async';
 
-class InventoryRiskSection extends StatelessWidget {
+import 'package:flutter/material.dart';
+import '../../models/products_model.dart';
+import '../../models/receipts_model.dart';
+import '../../services/dashboard_service.dart';
+import '../../services/product_service.dart';
+import '../../services/receipt_service.dart';
+
+class InventoryRiskSection extends StatefulWidget {
   const InventoryRiskSection({super.key});
+
+  @override
+  State<InventoryRiskSection> createState() => _InventoryRiskSectionState();
+}
+
+class _InventoryRiskSectionState extends State<InventoryRiskSection> {
+  // El Future se guarda en el estado: si se recreara en cada build, cualquier
+  // reconstruccion del dashboard relanzaria el calculo y volveria al spinner.
+  late Future<List<Map<String, dynamic>>> _future;
+
+  StreamSubscription<List<Product>>? _productSub;
+  StreamSubscription<List<Receipt>>? _receiptSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DashboardAiService().getInventoryRiskClassification();
+
+    // El nivel de riesgo depende del stock y de la demanda: se recalcula cuando
+    // cambia cualquiera de los dos, sin necesidad de salir del dashboard.
+    _productSub = ProductService().productStream.listen((_) => _recalculate());
+    _receiptSub = ReceiptService().receiptStream.listen((_) => _recalculate());
+  }
+
+  void _recalculate() {
+    if (!mounted) return;
+    setState(() {
+      _future = DashboardAiService().getInventoryRiskClassification();
+    });
+  }
+
+  @override
+  void dispose() {
+    _productSub?.cancel();
+    _receiptSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: DashboardAiService().getInventoryRiskClassification(),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildContainer(child: const Center(child: CircularProgressIndicator()));

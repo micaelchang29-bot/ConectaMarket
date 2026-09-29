@@ -1,13 +1,52 @@
-import 'package:flutter/material.dart';
-import '../../services/dashboard_service.dart';
+import 'dart:async';
 
-class StockAlertsSection extends StatelessWidget {
+import 'package:flutter/material.dart';
+import '../../models/products_model.dart';
+import '../../models/receipts_model.dart';
+import '../../services/dashboard_service.dart';
+import '../../services/product_service.dart';
+import '../../services/receipt_service.dart';
+
+class StockAlertsSection extends StatefulWidget {
   const StockAlertsSection({super.key});
+
+  @override
+  State<StockAlertsSection> createState() => _StockAlertsSectionState();
+}
+
+class _StockAlertsSectionState extends State<StockAlertsSection> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  StreamSubscription<List<Product>>? _productSub;
+  StreamSubscription<List<Receipt>>? _receiptSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = DashboardAiService().getLowStockAlerts();
+
+    _productSub = ProductService().productStream.listen((_) => _recalculate());
+    _receiptSub = ReceiptService().receiptStream.listen((_) => _recalculate());
+  }
+
+  void _recalculate() {
+    if (!mounted) return;
+    setState(() {
+      _future = DashboardAiService().getLowStockAlerts();
+    });
+  }
+
+  @override
+  void dispose() {
+    _productSub?.cancel();
+    _receiptSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: DashboardAiService().getLowStockAlerts(),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()));

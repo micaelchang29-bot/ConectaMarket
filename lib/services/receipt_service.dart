@@ -6,20 +6,33 @@ import 'package:conectamarket/services/product_service.dart';
 import 'package:intl/intl.dart';
 
 class ReceiptService {
+  // Singleton: todas las pantallas comparten la misma instancia para que el
+  // stream de recibos llegue tambien a las secciones del dashboard.
+  static final ReceiptService _instance = ReceiptService._internal();
+
+  factory ReceiptService() {
+    return _instance;
+  }
+
   final ReceiptRepository _repo = ReceiptRepository();
   final DateFormat _dateFormatter = DateFormat('yyyy-MM-dd');
 
-  
+  // Caché en RAM para pintar de inmediato a quien se suscriba despues de que
+  // el stream (broadcast, sin replay) ya haya emitido.
+  List<Receipt>? _cachedReceipts;
+  List<Receipt>? get cachedReceipts => _cachedReceipts;
+
   // Stream para notificar a la UI cuando cambien los recibos
   final _receiptController = StreamController<List<Receipt>>.broadcast();
   Stream<List<Receipt>> get receiptStream => _receiptController.stream;
 
-  ReceiptService() {
+  ReceiptService._internal() {
     refreshReceipts();
   }
 
   Future<void> refreshReceipts() async {
     final receipts = await _repo.getAllReceipts();
+    _cachedReceipts = receipts;
     _receiptController.add(receipts);
   }
 
