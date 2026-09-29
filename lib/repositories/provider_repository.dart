@@ -63,6 +63,11 @@ class ProviderRepository {
     );
   }
 
+  // Eliminar todos los proveedores
+  Future<void> deleteAllProviders() async {
+    final db = await _dbHelper.database;
+    await db.delete('providers');
+  }
 
   /// Obtiene el histórico de precios de compra cobrados por cada proveedor 
   /// para un producto específico, ordenados desde el más reciente.

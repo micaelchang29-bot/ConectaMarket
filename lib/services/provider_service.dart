@@ -53,6 +53,11 @@ class ProviderService {
     await refreshProviders();
   }
 
+  Future<void> deleteAllProviders() async {
+    await _repo.deleteAllProviders();
+    await refreshProviders();
+  }
+
   void dispose() {
     _providerController.close();
   }

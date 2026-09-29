@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import '../services/csvimportservice.dart';
 import '../services/product_service.dart';
 import '../services/receipt_service.dart';
+import '../services/provider_service.dart';
 import '../widgets_global/header_bar.dart';
 
 class ImportCsvScreen extends StatefulWidget {
@@ -14,7 +15,7 @@ class ImportCsvScreen extends StatefulWidget {
 }
 
 class _ImportCsvScreenState extends State<ImportCsvScreen> {
-  int _selectedIndex = 0; // 0: Productos, 1: Comprobantes
+  int _selectedIndex = 0; // 0: Productos, 1: Comprobantes, 2: Proveedores
   String? _fileName;
   String? _filePath;
   bool _isLoading = false;
@@ -42,7 +43,9 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
       final service = CsvImportService();
       final result = _selectedIndex == 0
           ? await service.importProductsFromCsv(_filePath!)
-          : await service.importReceiptsFromCsv(_filePath!);
+          : _selectedIndex == 1
+              ? await service.importReceiptsFromCsv(_filePath!)
+              : await service.importProvidersFromCsv(_filePath!);
 
       if (mounted) {
         setState(() {
@@ -119,7 +122,7 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
   }
 
     Future<void> _clearDatabase() async {
-    final entityName = _selectedIndex == 0 ? "productos" : "comprobantes";
+    final entityName = _selectedIndex == 0 ? "productos" : _selectedIndex == 1 ? "comprobantes" : "proveedores";
     final confirm = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -147,13 +150,16 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
     try {
     if (_selectedIndex == 0) {
       await ProductService().deleteAllProducts();
-    } else {
+    } else if (_selectedIndex == 1) {
       await ReceiptService().deleteAllReceipts();
+    } else {
+      await ProviderService().deleteAllProviders();
     }
 
     if (mounted) {
+      final entityName = _selectedIndex == 0 ? "Productos" : _selectedIndex == 1 ? "Comprobantes" : "Proveedores";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_selectedIndex == 0 ? "Productos" : "Comprobantes"} eliminados correctamente')),
+        SnackBar(content: Text('$entityName eliminados correctamente')),
       );
     }
     } catch (e) {
@@ -191,8 +197,9 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
                 ),
                 child: Row(
                   children: [
-                    _buildTabButton("Productos", 0),
-                    _buildTabButton("Comprobantes", 1),
+                    Expanded(child: _buildTabButton("Productos", 0)),
+                    Expanded(child: _buildTabButton("Comprobantes", 1)),
+                    Expanded(child: _buildTabButton("Proveedores", 2)),
                   ],
                 ),
               ),

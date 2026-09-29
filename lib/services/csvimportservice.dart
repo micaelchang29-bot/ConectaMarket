@@ -23,6 +23,36 @@ class CsvImportService {
   final ReceiptRepository _receiptRepository = ReceiptRepository();
   final ProviderRepository _providerRepository = ProviderRepository();
 
+  Future<CsvImportResult> importProvidersFromCsv(String filePath) async {
+    final file = File(filePath);
+    final String content = await file.readAsString(encoding: utf8);
+    final List<List<dynamic>> rows = Csv(dynamicTyping: true).decode(content);
+
+    int imported = 0;
+    final List<String> errors = [];
+
+    for (var i = 1; i < rows.length; i++) {
+      try {
+        final row = rows[i];
+        if (row.length < 2) throw Exception('Columnas insuficientes (se esperan al menos 2: id, nombre)');
+
+        final provider = Provider(
+          id: row[0].toString().trim(),
+          nombre: row[1].toString().trim(),
+          ruc: row.length > 2 ? row[2].toString().trim() : '',
+          telefono: row.length > 3 ? row[3].toString().trim() : '',
+        );
+
+        await _providerRepository.upsertProvider(provider);
+        imported++;
+      } catch (e) {
+        errors.add('Fila ${i + 1}: $e');
+      }
+    }
+
+    return CsvImportResult(imported: imported, errors: errors);
+  }
+
   Future<CsvImportResult> importProductsFromCsv(String filePath) async {
     final file = File(filePath);
     final String content = await file.readAsString(encoding: utf8);

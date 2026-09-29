@@ -64,7 +64,7 @@ class ProviderRankingSection extends StatelessWidget {
           children: List.generate(displayCount, (index) {
             final provider = providers[index];
             final String name = provider['nombre'] ?? '—';
-            final int score = (provider['global_score'] as num?)?.toInt() ?? 0;
+            final double score = (provider['global_score'] as num?)?.toDouble() ?? 0;
             final String recommendation = provider['recommendation'] ?? '';
             final int compras = (provider['num_compras'] as num?)?.toInt() ?? 0;
             final Color bg = _bgColors[index];
@@ -99,7 +99,7 @@ class ProviderRankingSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "$score/100",
+                        "${score.toStringAsFixed(1)}/100",
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: tc),
                       ),
                       const SizedBox(height: 4),

@@ -179,19 +179,41 @@ class DashboardRepository {
   Future<List<Map<String, dynamic>>> getProviderRanking() async {
     final db = await _dbHelper.database;
     return await db.rawQuery('''
-      WITH provider_stats AS (
+      WITH product_price_stats AS (
+        -- Variación de precio POR PRODUCTO (mismo producto a lo largo del tiempo),
+        -- no entre productos distintos del mismo proveedor.
+        SELECT
+          prov.id as provider_id,
+          ri.product_id,
+          COUNT(*) as num_compras_producto,
+          AVG(CAST(ri.costoUnitario as REAL)) as avg_p,
+          MAX(CAST(ri.costoUnitario as REAL)) as max_p,
+          MIN(CAST(ri.costoUnitario as REAL)) as min_p
+        FROM receipt_items ri
+        INNER JOIN receipts r ON ri.receipt_id = r.id
+        INNER JOIN providers prov ON r.provider_id = prov.id
+        WHERE r.tipomovimiento = 1
+        AND r.fecha >= date('now', '-365 days')
+        GROUP BY prov.id, ri.product_id
+      ),
+      provider_cv AS (
+        -- Promedio del CV de cada producto: mide consistencia real de precio del proveedor.
+        -- Se excluyen productos comprados una sola vez: sin repetición no hay variación
+        -- que medir, y contarlos como 0 diluiría el promedio hacia una falsa "consistencia".
+        SELECT
+          provider_id,
+          AVG(CASE WHEN avg_p > 0 THEN (max_p - min_p) / avg_p * 100 ELSE 0 END) as cv_price
+        FROM product_price_stats
+        WHERE num_compras_producto >= 2
+        GROUP BY provider_id
+      ),
+      provider_stats AS (
         SELECT
           prov.id,
           prov.nombre,
           COUNT(DISTINCT r.id) as num_compras,
           COUNT(DISTINCT ri.product_id) as num_productos,
           AVG(CAST(ri.costoUnitario as REAL)) as avg_price,
-          CASE
-            WHEN AVG(CAST(ri.costoUnitario as REAL)) > 0
-              THEN (MAX(CAST(ri.costoUnitario as REAL)) - MIN(CAST(ri.costoUnitario as REAL)))
-                   / AVG(CAST(ri.costoUnitario as REAL)) * 100
-            ELSE 0
-          END as cv_price,
           CAST((julianday('now') - julianday(MAX(r.fecha))) as INTEGER) as days_since_last
         FROM receipt_items ri
         INNER JOIN receipts r ON ri.receipt_id = r.id
@@ -200,13 +222,18 @@ class DashboardRepository {
         AND r.fecha >= date('now', '-365 days')
         GROUP BY prov.id
       ),
+      merged AS (
+        SELECT ps.*, COALESCE(pc.cv_price, 0) as cv_price
+        FROM provider_stats ps
+        LEFT JOIN provider_cv pc ON pc.provider_id = ps.id
+      ),
       scored AS (
         SELECT *,
           (30 * MIN(CAST(num_compras * 10 as REAL), 100) +
            30 * MAX(0.0, 100 - cv_price) +
            20 * CASE WHEN days_since_last < 30 THEN 100 WHEN days_since_last < 60 THEN 80 ELSE 50 END +
            20 * MIN(CAST(num_productos * 5 as REAL), 100)) / 100 as raw_score
-        FROM provider_stats
+        FROM merged
       )
       SELECT
         id,
@@ -216,7 +243,7 @@ class DashboardRepository {
         CAST(avg_price as REAL) as avg_price,
         CAST(cv_price as REAL) as cv_price,
         days_since_last,
-        CAST(raw_score as INTEGER) as global_score,
+        ROUND(raw_score, 1) as global_score,
         CASE
           WHEN raw_score >= 90 THEN 'EXCELENTE'
           WHEN raw_score >= 75 THEN 'BUENO'
@@ -286,7 +313,7 @@ class DashboardRepository {
         CAST(cv_qty as REAL) as cv_qty,
         CAST(total_quantity as REAL) as total_quantity,
         days_since_last,
-        CAST(raw_score as INTEGER) as provider_score,
+        ROUND(raw_score, 1) as provider_score,
         CASE
           WHEN raw_score >= 90 THEN 'EXCELENTE'
           WHEN raw_score >= 75 THEN 'BUENO'
