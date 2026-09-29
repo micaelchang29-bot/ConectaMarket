@@ -20,6 +20,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   // Controladores
   late TextEditingController _skuController;
   late TextEditingController _nombreController;
+  late TextEditingController _precioController;
   late TextEditingController _stockController;
   late TextEditingController _umbralController;
 
@@ -29,6 +30,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     // Inicializar controladores con datos existentes o vacíos
     _skuController = TextEditingController(text: widget.product?.id ?? '');
     _nombreController = TextEditingController(text: widget.product?.nombre ?? '');
+    _precioController = TextEditingController(
+      text: widget.product != null ? widget.product!.precio.toStringAsFixed(2) : '',
+    );
     _stockController = TextEditingController(text: widget.product?.stock.toString() ?? '0');
     _umbralController = TextEditingController(text: widget.product?.umbralAlerta.toString() ?? '5');
   }
@@ -37,6 +41,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   void dispose() {
     _skuController.dispose();
     _nombreController.dispose();
+    _precioController.dispose();
     _stockController.dispose();
     _umbralController.dispose();
     super.dispose();
@@ -48,6 +53,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final newProduct = Product(
       id: _skuController.text,
       nombre: _nombreController.text,
+      precio: double.tryParse(_precioController.text.replaceAll(',', '.')) ?? 0,
       stock: double.tryParse(_stockController.text) ?? 0,
       umbralAlerta: int.tryParse(_umbralController.text) ?? 5,
     );
@@ -140,6 +146,18 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 controller: _nombreController,
                 decoration: _inputDecoration("Nombre del Producto"),
                 validator: (v) => v!.isEmpty ? "Campo obligatorio" : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _precioController,
+                decoration: _inputDecoration("Precio de venta (S/)"),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Campo obligatorio";
+                  final n = double.tryParse(v.replaceAll(',', '.'));
+                  if (n == null || n <= 0) return "Ingrese un precio mayor a 0";
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(

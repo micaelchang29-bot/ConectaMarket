@@ -203,7 +203,32 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Formato de columnas esperado segun la pestaña activa
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F0ED),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Columnas esperadas (primera fila = encabezado)",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF005440)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _expectedColumns(),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF3F4944)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Zona de Carga
               GestureDetector(
@@ -283,6 +308,21 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
         ),
       ),
     );
+  }
+
+  String _expectedColumns() {
+    switch (_selectedIndex) {
+      case 0:
+        return "id, nombre, stock, umbralAlerta, precio\n"
+            "El precio de venta (S/) es opcional: si se omite queda en 0.";
+      case 1:
+        return "comprobante, proveedor, fecha, total, tipomovimiento (0=venta, 1=compra), "
+            "producto_id, cantidad, costoUnitario, serie\n"
+            "La serie es opcional (por defecto B001).";
+      default:
+        return "id, nombre, ruc, telefono\n"
+            "El RUC y el teléfono son opcionales.";
+    }
   }
 
   Widget _buildTabButton(String title, int index) {

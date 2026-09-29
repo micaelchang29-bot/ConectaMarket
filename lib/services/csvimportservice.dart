@@ -64,13 +64,26 @@ class CsvImportService {
     for (var i = 1; i < rows.length; i++) {
       try {
         final row = rows[i];
-        if (row.length < 4) throw Exception('Columnas insuficientes (se esperan 4)');
+        if (row.length < 4) {
+          throw Exception('Columnas insuficientes (se esperan al menos 4: id, nombre, stock, umbralAlerta)');
+        }
+
+        // La 5a columna (precio de venta) es opcional para seguir aceptando
+        // los CSV antiguos de 4 columnas: en ese caso el precio queda en 0.
+        double precio = 0;
+        if (row.length >= 5 && row[4].toString().trim().isNotEmpty) {
+          precio = num.parse(row[4].toString().trim()).toDouble();
+          if (precio <= 0) {
+            throw Exception('El precio de venta debe ser mayor a 0');
+          }
+        }
 
         final product = Product(
           id: row[0].toString(),
           nombre: row[1].toString(),
           stock: num.parse(row[2].toString()).toDouble(),
           umbralAlerta: num.parse(row[3].toString()).toInt(),
+          precio: precio,
         );
 
         await _repo.upsertProduct(product);

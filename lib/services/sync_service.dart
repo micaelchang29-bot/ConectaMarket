@@ -136,6 +136,8 @@ class SyncService {
           nombre: map['nombre']?.toString() ?? '',
           stock: (map['stock'] as num?)?.toDouble() ?? 0,
           umbralAlerta: (map['umbralAlerta'] as num?)?.toInt() ?? 0,
+          // Los backups anteriores a la version 5 no traen 'precio': queda en 0.
+          precio: (map['precio'] as num?)?.toDouble() ?? 0,
         ));
       }
 

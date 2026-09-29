@@ -32,7 +32,11 @@ class ProductService {
 
   // Método unificado para UI y para Ingesta Automática
   Future<void> saveProduct(Product product) async {
-    // Poner reglas de negocio comunes (ej. validar stock >= 0)
+    // Regla de negocio: el precio de venta al cliente es obligatorio y positivo.
+    if (product.precio <= 0) {
+      throw Exception("El precio de venta debe ser mayor a 0.");
+    }
+
     await _repo.upsertProduct(product);
     await refreshProducts(); // Notificar a la UI
   }

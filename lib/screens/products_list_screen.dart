@@ -52,7 +52,7 @@ class CatalogScreen extends StatelessWidget {
                 return BaseCardWidget(
                   title: p.nombre,
                   subtitle: "SKU: ${p.id}",
-                  priceOrStatus: "Stock: ${p.stock.toString()} un.", 
+                  priceOrStatus: "S/ ${p.precio.toStringAsFixed(2)} · Stock: ${p.stock} un.",
                   statusLabel: p.stock <= p.umbralAlerta ? "STOCK BAJO" : "DISPONIBLE",
                   statusColor: p.stock <= p.umbralAlerta ? Colors.orange : Colors.green,
                   onTap: () {

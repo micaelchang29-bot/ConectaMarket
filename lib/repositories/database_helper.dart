@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -42,7 +42,8 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         nombre TEXT NOT NULL,
         stock REAL DEFAULT 0,
-        umbralAlerta INTEGER DEFAULT 5
+        umbralAlerta INTEGER DEFAULT 5,
+        precio REAL DEFAULT 0
       )
     ''');
 
@@ -80,6 +81,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 4) {
       await db.execute("ALTER TABLE receipts ADD COLUMN serie TEXT DEFAULT 'B001'");
+    }
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE products ADD COLUMN precio REAL DEFAULT 0');
     }
   }
 
