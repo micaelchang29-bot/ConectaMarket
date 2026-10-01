@@ -72,14 +72,43 @@ Firebase no esté inicializado. Era necesario: los 37 tests de este repo no
 llaman a `Firebase.initializeApp()`, y sin este cambio cualquier `upsert`
 en un test habría reventado al intentar leer la sesión activa.
 
-### Deliberadamente no implementado: backfill del historial existente
+### Backfill del historial existente — implementado, versión "guardada"
 
-Estampar hacia adelante no llena `bodega_id` en las filas que ya existían
-antes de este cambio en un dispositivo instalado — esas quedan en NULL hasta
-que algo las etiquete retroactivamente con el uid de quien use ese
-dispositivo. Es una decisión de diseño separada (dónde se dispara esa pasada,
-si al detectar sesión en `main.dart` o en otro punto) que no fue parte de lo
-aprobado en esta entrega — queda abierta para cuando se decida encarar.
+El supuesto "cada dispositivo perteneció siempre a una sola bodega" no está
+verificado para los dispositivos piloto, así que el backfill detecta la duda
+en vez de asumir. [bodega_backfill_service.dart](../lib/services/bodega_backfill_service.dart),
+por tabla (`providers`, `products`, `receipts`, evaluadas de forma
+independiente):
+
+1. Si existe alguna fila con `bodega_id NOT NULL` y distinto al uid de la
+   sesión activa → **evidencia de que el dispositivo tuvo otra cuenta antes**.
+   Esa tabla puntual queda intacta (`BodegaBackfillOutcome.ambiguous`), con un
+   log claro y el valor ajeno detectado en el resultado, para revisión manual.
+   Las otras tablas se siguen evaluando igual.
+2. Si no hay ningún valor ajeno → `UPDATE <tabla> SET bodega_id = uid WHERE
+   bodega_id IS NULL`. Sin flag de "ya corrió": es naturalmente idempotente, y
+   si alguien resuelve la ambigüedad a mano, la próxima sesión activa la
+   backfillea sola.
+3. Un error real de SQLite en una tabla (`BodegaBackfillOutcome.error`,
+   distinto del caso ambiguo) se aísla igual — no bloquea a las otras tablas
+   ni se propaga como excepción.
+
+El servicio no depende de Firebase/AuthService: recibe el uid ya resuelto
+(`runForBodega(String bodegaId)`), lo que lo deja testeable con SQLite en
+memoria sin inicializar Firebase, igual que el resto de los tests del repo.
+Quien detecta la sesión activa es [main.dart](../lib/main.dart), suscrito a
+`AuthService.instance.userStream` (cubre tanto el arranque con sesión ya
+persistida como un login explícito posterior) y lo dispara sin `await` — una
+corrección en segundo plano que nunca debe bloquear el arranque de la UI ni
+el login.
+
+13 tests en [bodega_backfill_service_test.dart](../test/bodega_backfill_service_test.dart),
+parametrizados por tabla: alta limpia → backfillea, bodega_id ajena ya
+presente → aborta esa tabla sin tocar nada, segunda corrida sin NULLs → no-op,
+más un caso cruzado (una tabla ambigua no bloquea a las demás) y uno de
+aislamiento de errores reales (se corrompe una tabla con `DROP TABLE` para
+forzar un error de SQLite genuino, distinto del caso ambiguo). Suite completa:
+**49/49 en verde**.
 
 ---
 
@@ -252,7 +281,7 @@ Cloud Function.
 | SQLite sin `bodega_id` | ✅ Columna agregada a `products`/`providers`/`receipts`, migración probada |
 | Firestore sin colecciones normalizadas | ✅ Diseñado: `productos`/`ventas`/`compras` a nivel de ítem, consultable por rango de fecha y por `collectionGroup` |
 | Reglas para las colecciones nuevas | ✅ Escritas en `firestore.rules`, no desplegadas |
-| Quién estampa `bodega_id` en cada escritura nueva | ✅ Opción A implementada: los 3 repositorios lo estampan en el alta y lo preservan en cada edición (37/37 tests) |
-| Backfill del historial existente en cada dispositivo | ⬜ Abierto — deliberadamente no incluido en esta entrega |
+| Quién estampa `bodega_id` en cada escritura nueva | ✅ Opción A implementada: los 3 repositorios lo estampan en el alta y lo preservan en cada edición |
+| Backfill del historial existente en cada dispositivo | ✅ Implementado con detección de ambigüedad por tabla, sin asumir una sola bodega por dispositivo (49/49 tests) |
 | Sync real hacia las colecciones nuevas (`sync_service.dart`) | ⬜ Fase 2, fuera de este alcance a propósito |
 | `firestore.indexes.json` | ⬜ Diferido hasta conocer la query real del training job |
