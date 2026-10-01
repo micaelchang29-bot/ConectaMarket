@@ -6,8 +6,8 @@ import 'package:conectamarket/repositories/product_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// Verifica que una base ya existente en la versión 4 (sin la columna precio)
-/// se migre a la versión 5 sin perder datos.
+/// Verifica que una base ya existente en la versión 4 (sin precio ni
+/// bodega_id) migre de forma acumulativa hasta la versión 6 sin perder datos.
 void main() {
   late Directory tempDir;
   late String dbPath;
@@ -86,20 +86,33 @@ void main() {
     }
   });
 
+  Future<List<String>> columnasDe(String tabla) async {
+    final db = await DatabaseHelper.instance.database;
+    final info = await db.rawQuery('PRAGMA table_info($tabla)');
+    return info.map((c) => c['name'] as String).toList();
+  }
+
   test('al abrir una base v4 se agrega products.precio con valor 0', () async {
     final db = await DatabaseHelper.instance.database;
-    expect(await db.getVersion(), 5);
+    expect(await db.getVersion(), 6);
 
-    final columnas = (await db.rawQuery('PRAGMA table_info(products)'))
-        .map((c) => c['name'] as String)
-        .toList();
-    expect(columnas, contains('precio'));
+    expect(await columnasDe('products'), contains('precio'));
 
     // El producto que ya existía se conserva y su precio queda en 0.
     final producto = (await ProductRepository().getAllProducts()).firstWhere((p) => p.id == 'P001');
     expect(producto.nombre, 'Arroz Costeño 1kg');
     expect(producto.stock, 24);
     expect(producto.precio, 0);
+  });
+
+  test('al abrir una base v4 se agrega bodega_id en providers/products/receipts, no en receipt_items', () async {
+    await DatabaseHelper.instance.database;
+
+    expect(await columnasDe('providers'), contains('bodega_id'));
+    expect(await columnasDe('products'), contains('bodega_id'));
+    expect(await columnasDe('receipts'), contains('bodega_id'));
+    // receipt_items no lleva bodega_id propio: se deriva via receipt_id.
+    expect(await columnasDe('receipt_items'), isNot(contains('bodega_id')));
   });
 
   test('tras la migración se puede guardar un producto con precio', () async {

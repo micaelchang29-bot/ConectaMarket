@@ -41,7 +41,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -54,7 +54,8 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         nombre TEXT NOT NULL,
         ruc TEXT,
-        telefono TEXT
+        telefono TEXT,
+        bodega_id TEXT
       )
     ''');
 
@@ -65,7 +66,8 @@ class DatabaseHelper {
         nombre TEXT NOT NULL,
         stock REAL DEFAULT 0,
         umbralAlerta INTEGER DEFAULT 5,
-        precio REAL DEFAULT 0
+        precio REAL DEFAULT 0,
+        bodega_id TEXT
       )
     ''');
 
@@ -79,11 +81,15 @@ class DatabaseHelper {
         tipomovimiento INTEGER DEFAULT 0,
         synced INTEGER DEFAULT 0,
         serie TEXT DEFAULT 'B001',
+        bodega_id TEXT,
         FOREIGN KEY (provider_id) REFERENCES providers(id)
       )
     ''');
 
     // Tabla de Items de Recibos (Detalle)
+    // No lleva bodega_id propio: se deriva de receipts.bodega_id via
+    // receipt_id, para no duplicar el dato (siempre se consulta junto a su
+    // recibo, nunca de forma aislada).
     await db.execute('''
       CREATE TABLE receipt_items (
         id TEXT PRIMARY KEY,
@@ -106,6 +112,15 @@ class DatabaseHelper {
     }
     if (oldVersion < 5) {
       await db.execute('ALTER TABLE products ADD COLUMN precio REAL DEFAULT 0');
+    }
+    if (oldVersion < 6) {
+      // Identifica a que bodega (uid de Firebase Auth) pertenece cada fila.
+      // Nullable: las filas existentes quedan sin asignar hasta que una
+      // migracion de datos (fuera de este alcance) las etiquete con el uid
+      // de quien use el dispositivo.
+      await db.execute('ALTER TABLE providers ADD COLUMN bodega_id TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN bodega_id TEXT');
+      await db.execute('ALTER TABLE receipts ADD COLUMN bodega_id TEXT');
     }
   }
 

@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Esquema actual (backup completo, Fase 0) --------------------------
+    // Snapshot embebido de inventario + movimientos. Se mantiene vigente
+    // mientras sync_service.dart no se migre a la Fase 2.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- Esquema normalizado nuevo (Fase 1) ---------------------------------
+    // Una bodega = un uid de Firebase Auth. No existe un documento
+    // bodegas/{bodegaId} en si mismo (no hay tabla/perfil de bodegas); el
+    // uid solo actua como segmento de ruta que aisla el subarbol de cada
+    // negocio. Las colecciones se declaran una por una (en vez de un unico
+    // {document=**} recursivo) porque las reglas de Firestore son aditivas:
+    // si una coincidencia amplia ya otorga "write", ninguna coincidencia mas
+    // especifica puede luego revocarlo para una subcoleccion puntual. Separar
+    // las rutas es lo que permite que "forecasts" sea de solo lectura.
+
+    match /bodegas/{bodegaId}/productos/{productoId} {
+      allow read, write: if request.auth != null && request.auth.uid == bodegaId;
+    }
+
+    match /bodegas/{bodegaId}/ventas/{ventaId} {
+      allow read, write: if request.auth != null && request.auth.uid == bodegaId;
+    }
+
+    match /bodegas/{bodegaId}/compras/{compraId} {
+      allow read, write: if request.auth != null && request.auth.uid == bodegaId;
+    }
+
+    // Los forecasts los genera la Cloud Function de entrenamiento con el
+    // Admin SDK, que ignora estas reglas por completo. El cliente (la app)
+    // solo puede leer los forecasts de su propia bodega; nunca escribirlos,
+    // para que un cliente comprometido no pueda falsificar una prediccion.
+    match /bodegas/{bodegaId}/forecasts/{forecastId} {
+      allow read: if request.auth != null && request.auth.uid == bodegaId;
+      allow write: if false;
+    }
+  }
+}
