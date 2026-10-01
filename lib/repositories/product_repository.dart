@@ -1,5 +1,6 @@
 import 'package:conectamarket/models/products_model.dart';
 import 'package:conectamarket/repositories/database_helper.dart';
+import 'package:conectamarket/services/auth_service.dart';
 import 'package:sqflite/sqflite.dart';
 
 
@@ -9,9 +10,24 @@ class ProductRepository {
   // Insertar o actualizar producto (Upsert)
   Future<void> upsertProduct(Product product) async {
     final db = await _dbHelper.database;
+
+    // bodega_id identifica al dueño original de la fila: se estampa una sola
+    // vez, en el alta. REPLACE INTO reemplaza la fila completa, así que en
+    // una edición hay que reafirmar el valor ya existente explícitamente o se
+    // perdería (quedaría NULL) aunque nadie haya cambiado de sesión.
+    final existing = await db.query(
+      'products',
+      columns: ['bodega_id'],
+      where: 'id = ?',
+      whereArgs: [product.id],
+    );
+    final String? bodegaId = existing.isNotEmpty
+        ? existing.first['bodega_id'] as String?
+        : AuthService.instance.currentUid;
+
     await db.insert(
       'products',
-      product.toMap(),
+      {...product.toMap(), 'bodega_id': bodegaId},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

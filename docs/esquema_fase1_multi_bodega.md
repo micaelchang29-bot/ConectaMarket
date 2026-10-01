@@ -41,27 +41,45 @@ ese dato no existe en el momento de la migración — correr `ALTER TABLE` pasa
 durante la apertura de la base, antes o independientemente de que haya una
 sesión activa. Ponerle un default inventado sería peor que dejarlo en NULL.
 
-### Lo que queda pendiente — decisión de diseño que no tomé por vos
+### Cómo se estampa `bodega_id` en cada escritura nueva — implementado (Opción A)
 
-Agregar la columna no hace que se llene sola. Falta decidir **dónde** se
-estampa `bodega_id = currentUser.uid` en cada escritura nueva, y **cómo** se
-backfillea lo que ya existe en un dispositivo. Tres opciones, con trade-offs
-reales:
+`product_repository.dart` (`upsertProduct`), `provider_repository.dart`
+(`upsertProvider`) y `receipt_repository.dart` (`saveFullReceipt`) ahora leen
+`AuthService.instance.currentUid` antes de insertar. No se tocó
+`csvimportservice.dart`: la importación CSV escribe a través de estos mismos
+repositorios, así que queda cubierta gratis.
 
-| Opción | Dónde se cablea | Qué toca | Trade-off |
-|---|---|---|---|
-| **A. En el repositorio** (recomendada) | `product_repository.dart`, `provider_repository.dart`, `receipt_repository.dart` leen `AuthService.instance.currentUser?.uid` justo antes del `insert` | Solo esos 3 archivos. Nada más — ni `*_service.dart`, ni `csvimportscreen.dart`, ni los tests, porque las firmas públicas no cambian | El repositorio pasa a conocer `auth_service.dart`, una capa que hoy no toca. Es la única opción que cubre la importación CSV **sin tocar `csvimportservice.dart`**, porque el CSV también escribe a través de estos mismos repositorios. |
-| B. Parámetro explícito | Se agrega `bodegaId` a `upsertProduct`, `upsertProvider`, `saveFullReceipt` | Todos los call sites: los 3 servicios, `csvimportservice.dart`, `sync_service.dart` y **6 archivos de test** | Más "limpio" en términos de capas (sin acoplar repositorio↔auth), pero el blast radius choca directo con "no toques `csvimportservice.dart`/`sync_service.dart` todavía" |
-| C. Backfill en `main.dart` al iniciar sesión | Una pasada que llena `bodega_id` en filas con NULL cuando se detecta usuario autenticado | `main.dart` o un servicio nuevo de migración | Resuelve el historial viejo, pero no resuelve la escritura hacia adelante — hace falta igual A o B para los datos nuevos |
+**Invariante aplicada en los tres:** `bodega_id` se estampa **solo en el
+alta**, nunca se pisa en una edición. `REPLACE INTO` (el `ConflictAlgorithm.replace`
+que ya usaba el código) reemplaza la fila completa — cualquier columna no
+incluida en el mapa vuelve a su default. Sin cuidarlo, editar un producto
+estando deslogueado habría borrado el `bodega_id` ya asignado. Por eso cada
+repositorio consulta primero si la fila ya existe: si existe, conserva su
+`bodega_id` tal cual estaba; si es nueva, recién ahí toma el uid de la sesión
+activa (o `null` si no hay sesión, igual que hoy). Cubierto por
+[bodega_id_stamping_test.dart](../test/bodega_id_stamping_test.dart) (6 casos:
+alta sin sesión → NULL, edición con dueño ya asignado → se preserva, para
+`products`, `providers` y `receipts`).
 
-Mi recomendación es **A + C**: estampar en los repositorios de aquí en más
-(cubre todo escritura nueva, incluida CSV, sin tocar los archivos que pediste
-no tocar), y una pasada de backfill al detectar sesión activa para el
-historial existente de cada instalación (que hoy ya es de una sola bodega
-por dispositivo, así que asignarle el uid actual es correcto). No lo
-implementé porque toca `product_repository.dart` y `receipt_repository.dart`
-más allá de lo pedido explícitamente para esta entrega — avisame si seguimos
-con esto antes de pasar a Fase 2.
+`receipt_items` sigue sin columna propia, como ya estaba decidido: se deriva
+siempre vía `receipt_id → receipts.bodega_id`.
+
+**`auth_service.dart`** recibió el único cambio fuera de los repositorios:
+`FirebaseAuth.instance` pasó de capturarse en un campo (evaluado al construir
+el singleton) a un getter (evaluado en cada uso), y se agregó
+`currentUid` — una versión de `currentUser?.uid` que nunca lanza, aunque
+Firebase no esté inicializado. Era necesario: los 37 tests de este repo no
+llaman a `Firebase.initializeApp()`, y sin este cambio cualquier `upsert`
+en un test habría reventado al intentar leer la sesión activa.
+
+### Deliberadamente no implementado: backfill del historial existente
+
+Estampar hacia adelante no llena `bodega_id` en las filas que ya existían
+antes de este cambio en un dispositivo instalado — esas quedan en NULL hasta
+que algo las etiquete retroactivamente con el uid de quien use ese
+dispositivo. Es una decisión de diseño separada (dónde se dispara esa pasada,
+si al detectar sesión en `main.dart` o en otro punto) que no fue parte de lo
+aprobado en esta entrega — queda abierta para cuando se decida encarar.
 
 ---
 
@@ -231,10 +249,10 @@ Cloud Function.
 
 | Blocker original | Estado |
 |---|---|
-| SQLite sin `bodega_id` | ✅ Columna agregada a `products`/`providers`/`receipts`, migración probada (31/31 tests) |
+| SQLite sin `bodega_id` | ✅ Columna agregada a `products`/`providers`/`receipts`, migración probada |
 | Firestore sin colecciones normalizadas | ✅ Diseñado: `productos`/`ventas`/`compras` a nivel de ítem, consultable por rango de fecha y por `collectionGroup` |
 | Reglas para las colecciones nuevas | ✅ Escritas en `firestore.rules`, no desplegadas |
-| Quién estampa `bodega_id` en cada escritura nueva | ⬜ Abierto — ver tabla de opciones arriba, recomiendo A+C |
-| Backfill del historial existente en cada dispositivo | ⬜ Abierto — depende de la decisión anterior |
+| Quién estampa `bodega_id` en cada escritura nueva | ✅ Opción A implementada: los 3 repositorios lo estampan en el alta y lo preservan en cada edición (37/37 tests) |
+| Backfill del historial existente en cada dispositivo | ⬜ Abierto — deliberadamente no incluido en esta entrega |
 | Sync real hacia las colecciones nuevas (`sync_service.dart`) | ⬜ Fase 2, fuera de este alcance a propósito |
 | `firestore.indexes.json` | ⬜ Diferido hasta conocer la query real del training job |

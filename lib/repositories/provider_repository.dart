@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../repositories/database_helper.dart';
 import '../models/providers_model.dart';
+import '../services/auth_service.dart';
 
 class ProviderRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -8,9 +9,22 @@ class ProviderRepository {
   // Insertar o actualizar proveedor (Upsert)
   Future<void> upsertProvider(Provider provider) async {
     final db = await _dbHelper.database;
+
+    // Mismo criterio que en product_repository.dart: bodega_id se estampa
+    // solo en el alta y se preserva en cada edición posterior.
+    final existing = await db.query(
+      'providers',
+      columns: ['bodega_id'],
+      where: 'id = ?',
+      whereArgs: [provider.id],
+    );
+    final String? bodegaId = existing.isNotEmpty
+        ? existing.first['bodega_id'] as String?
+        : AuthService.instance.currentUid;
+
     await db.insert(
       'providers',
-      provider.toMap(),
+      {...provider.toMap(), 'bodega_id': bodegaId},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

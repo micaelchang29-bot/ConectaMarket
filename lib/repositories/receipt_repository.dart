@@ -1,6 +1,7 @@
 import 'package:conectamarket/models/receipt_items_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
 import 'package:conectamarket/repositories/database_helper.dart';
+import 'package:conectamarket/services/auth_service.dart';
 import 'package:sqflite/sqflite.dart';
 
 
@@ -12,14 +13,27 @@ class ReceiptRepository {
     if (items.isEmpty) {
       throw Exception("No se puede registrar un recibo sin ítems.");
     }
-    
+
     final db = await _dbHelper.database;
-    
+
+    // Mismo criterio que en product_repository.dart: bodega_id se estampa
+    // solo en el alta y se preserva en cada edición posterior. receipt_items
+    // no lo necesita: se deriva via receipt_id -> receipts.bodega_id.
+    final existing = await db.query(
+      'receipts',
+      columns: ['bodega_id'],
+      where: 'id = ?',
+      whereArgs: [receipt.id],
+    );
+    final String? bodegaId = existing.isNotEmpty
+        ? existing.first['bodega_id'] as String?
+        : AuthService.instance.currentUid;
+
     await db.transaction((txn) async {
       // Insertar Cabecera
       await txn.insert(
-        'receipts', 
-        receipt.toMap(), 
+        'receipts',
+        {...receipt.toMap(), 'bodega_id': bodegaId},
         conflictAlgorithm: ConflictAlgorithm.replace
       );
       
