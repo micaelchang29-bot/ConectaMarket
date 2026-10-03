@@ -225,5 +225,46 @@ void main() {
 
       expect(await bodegaIdDe('receipts', 'REC-RESTORE-3'), 'uid-dueno-original');
     });
+
+    test(
+      'restaurar con la MISMA sesión que subió el backup (bodega_id embebido = currentUid) '
+      'sigue funcionando igual que antes del fix, items incluidos',
+      () async {
+        await productRepo.upsertProduct(Product(id: 'P001', nombre: 'Arroz Costeño 1kg', stock: 100, precio: 4.50));
+
+        await repoConSesionA.insertReceiptForRestore(
+          {
+            'id': 'REC-RESTORE-4',
+            'provider_id': null,
+            'fecha': '2026-09-01',
+            'total': 22.50,
+            'tipomovimiento': 0,
+            'synced': 1,
+            'serie': 'B001',
+            'bodega_id': 'uid-sesion-A', // el mismo uid que la sesión que restaura
+          },
+          [
+            {'id': 'ITEM-RESTORE-4', 'receipt_id': 'REC-RESTORE-4', 'product_id': 'P001', 'cantidad': 5.0, 'costoUnitario': 4.50},
+          ],
+        );
+
+        // El resultado es el mismo que antes del fix: el valor embebido ya
+        // coincidía con la sesión, no hay nada que corregir.
+        expect(await bodegaIdDe('receipts', 'REC-RESTORE-4'), 'uid-sesion-A');
+
+        // El fix de H2 solo toca la cabecera: los items se insertan igual
+        // que siempre.
+        final db = await DatabaseHelper.instance.database;
+        final items = await db.query('receipt_items', where: 'receipt_id = ?', whereArgs: ['REC-RESTORE-4']);
+        expect(items, hasLength(1));
+        expect(items.first['product_id'], 'P001');
+        expect(items.first['cantidad'], 5.0);
+
+        // El resto de los campos de la cabecera tambien se preserva intacto.
+        final receiptRows = await db.query('receipts', where: 'id = ?', whereArgs: ['REC-RESTORE-4']);
+        expect(receiptRows.first['total'], 22.50);
+        expect(receiptRows.first['serie'], 'B001');
+      },
+    );
   });
 }
