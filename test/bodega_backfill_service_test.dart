@@ -138,4 +138,39 @@ void main() {
     expect(resultados, isEmpty);
     expect(await bodegaIdDe('products', 'p1'), isNull);
   });
+
+  group('H1 - inspeccionarTabla (diagnostico de solo lectura de un caso ambiguous)', () {
+    test('refleja correctamente un caso ambiguous fabricado: NULLs y los dueños en conflicto', () async {
+      // Fabrica exactamente el escenario que deja a una tabla en estado
+      // ambiguous: dos bodega_id ajenas entre si, mas filas huerfanas (NULL).
+      await insertarFila('products', 'p_uidA_1', 'uid-A');
+      await insertarFila('products', 'p_uidA_2', 'uid-A');
+      await insertarFila('products', 'p_uidB_1', 'uid-B');
+      await insertarFila('products', 'p_uidB_2', 'uid-B');
+      await insertarFila('products', 'p_uidB_3', 'uid-B');
+      await insertarFila('products', 'p_huerfano_1', null);
+
+      final reporte = await service.inspeccionarTabla('products');
+
+      expect(reporte.tabla, 'products');
+      expect(reporte.filasNull, 1);
+      expect(reporte.conteoPorBodegaId, {'uid-A': 2, 'uid-B': 3});
+      expect(reporte.cantidadBodegaIdsDistintas, 2);
+    });
+
+    test('una tabla sin conflicto (una sola bodega_id, sin NULLs) lo refleja también', () async {
+      await insertarFila('providers', 'prov1', 'uid-A');
+      await insertarFila('providers', 'prov2', 'uid-A');
+
+      final reporte = await service.inspeccionarTabla('providers');
+
+      expect(reporte.filasNull, 0);
+      expect(reporte.conteoPorBodegaId, {'uid-A': 2});
+      expect(reporte.cantidadBodegaIdsDistintas, 1);
+    });
+
+    test('una tabla desconocida lanza ArgumentError en vez de ejecutar SQL con un nombre arbitrario', () async {
+      expect(() => service.inspeccionarTabla('DROP TABLE products; --'), throwsArgumentError);
+    });
+  });
 }

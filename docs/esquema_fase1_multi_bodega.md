@@ -107,8 +107,113 @@ parametrizados por tabla: alta limpia → backfillea, bodega_id ajena ya
 presente → aborta esa tabla sin tocar nada, segunda corrida sin NULLs → no-op,
 más un caso cruzado (una tabla ambigua no bloquea a las demás) y uno de
 aislamiento de errores reales (se corrompe una tabla con `DROP TABLE` para
-forzar un error de SQLite genuino, distinto del caso ambiguo). Suite completa:
-**49/49 en verde**.
+forzar un error de SQLite genuino, distinto del caso ambiguo).
+
+---
+
+## 1.1 Hallazgos de [validacion_fase1.md](validacion_fase1.md), resueltos
+
+Una auditoría de cobertura sobre esta rama encontró 3 hallazgos importantes
+(H1, H2, H5), 2 menores (H3, H4) y 3 observaciones (H6, H7, H8). Esta sección
+cierra H5, H2 y H1, en ese orden porque H2 y H1 dependían de tener primero
+una forma real de probar el estampado con un uid de verdad. El resto queda
+como deuda aceptada (ver más abajo).
+
+### H5 — `AuthService` no era inyectable: nadie probaba el estampado con un uid real
+
+Los tres repositorios leían `AuthService.instance.currentUid` directo. Los
+tests de estampado solo ejercitaban la rama de *fallback* (sin sesión → NULL),
+porque no había forma de simular una sesión real sin inicializar Firebase.
+
+Se resolvió la causa raíz, no el síntoma puntual: nueva interfaz
+[uid_provider.dart](../lib/services/uid_provider.dart) (`UidProvider`, un solo
+getter, `currentUid`), que `AuthService` ya implementa sin cambios (el getter
+que tenía calzaba exacto). Los tres repositorios
+([product_repository.dart](../lib/repositories/product_repository.dart),
+[provider_repository.dart](../lib/repositories/provider_repository.dart),
+[receipt_repository.dart](../lib/repositories/receipt_repository.dart)) ahora
+reciben un `UidProvider?` opcional por constructor, con `AuthService.instance`
+como default — **cero cambio de superficie pública**: cada
+`ProductRepository()`, `ProviderRepository()`, `ReceiptRepository()` existente
+en el resto del código (servicios, `csvimportservice.dart`, `sync_service.dart`,
+todos los tests previos) sigue compilando y comportándose igual, sin tocar un
+solo call site.
+
+Tests nuevos en [bodega_id_stamping_test.dart](../test/bodega_id_stamping_test.dart)
+(grupo `H5`, +4): un `_FakeUidProvider` inyectado con un uid real confirma que
+el alta en `products`/`providers`/`receipts` queda estampada con **ese** uid,
+no con `null` — el caso central de la Fase 1 que antes solo se podía
+verificar a mano en un dispositivo. Un cuarto test confirma que la rama de
+*fallback* (sin inyectar nada) sigue exactamente igual que antes.
+
+### H2 — `insertReceiptForRestore` no estampaba `bodega_id`
+
+Usada por `sync_service.dart` dentro de `restore()`, insertaba el mapa crudo
+del backup tal cual. Si el backup se tomó desde una base v6+, ese mapa ya
+trae `bodega_id` embebido —el de quien subió el backup a la nube—, y antes
+de este fix quedaba tal cual en la base local: restaurar el backup de otra
+cuenta dejaba los recibos con un dueño ajeno, de forma permanente (el
+backfill los marcaría `ambiguous` para siempre, ver H1 más abajo).
+
+Fix en [receipt_repository.dart](../lib/repositories/receipt_repository.dart):
+`insertReceiptForRestore` aplica **el mismo criterio ya existente** en
+`saveFullReceipt` (alta → estampa con `_uidProvider.currentUid`, edición →
+preserva el valor local existente), reutilizando el mismo `_uidProvider`
+inyectado de H5 — no un mecanismo nuevo. El `bodega_id` que venga embebido en
+el mapa del backup se descarta a propósito: quien restaura pasa a ser el
+dueño de los datos restaurados, no quien los subió originalmente.
+
+3 tests nuevos (grupo `H2` en el mismo archivo): un alta nueva por restore
+quedaba con la sesión que restaura; el caso que reproduce el bug tal cual se
+encontró (mapa con `bodega_id: 'uid-cuenta-B'` embebido, sesión activa
+`uid-sesion-A` → el resultado queda en `uid-sesion-A`, no en `uid-cuenta-B`);
+y un restore sobre un recibo que ya existía localmente preserva su dueño
+original (no se lo "roba" un segundo restore).
+
+### H1 — no había forma de ver ni resolver una tabla marcada `ambiguous`
+
+El backfill ya logueaba el caso, pero no dejaba ninguna herramienta para
+después: ni ver cuántas filas NULL quedaron pendientes, ni qué dueños
+conviven en la tabla. Nuevo método de **solo lectura**,
+`inspeccionarTabla(String tabla)`, en el mismo
+[bodega_backfill_service.dart](../lib/services/bodega_backfill_service.dart),
+que devuelve un `BodegaAmbiguityReport`: cuántas filas NULL hay y, de las que
+sí tienen dueño, cuántas filas tiene cada `bodega_id` distinto (todas, no solo
+la primera que encuentre — a diferencia del log del backfill, que sigue
+usando `LIMIT 1` sin `ORDER BY` por diseño, ver H3 en la deuda aceptada).
+
+No resuelve nada automáticamente a propósito — decidir a quién pertenecen
+esas filas es una decisión de negocio, no del código. El propio docstring del
+método deja el ejemplo concreto de qué se espera que alguien haga con el
+resultado: un `UPDATE` dirigido sobre el `bodega_id` que corresponda, y
+después dejar que la próxima sesión activa backfillee sola las NULL
+restantes (misma propiedad de autocuración ya documentada arriba).
+
+3 tests nuevos (grupo `H1` en
+[bodega_backfill_service_test.dart](../test/bodega_backfill_service_test.dart)):
+un caso `ambiguous` fabricado a propósito (dos dueños distintos + una fila
+huérfana) confirma el conteo exacto por `bodega_id` y el total de NULLs; un
+caso sin conflicto lo refleja igual de bien; y pasar un nombre de tabla que
+no es una de las tres conocidas lanza `ArgumentError` en vez de ejecutar SQL
+con un nombre de tabla arbitrario.
+
+### Resultado
+
+**59/59 tests en verde** (+10 sobre los 49 anteriores: +4 de H5, +3 de H2, +3
+de H1), `flutter analyze` en los mismos 15 issues preexistentes de siempre.
+No se tocó `firestore.rules`, `sync_service.dart`, `csvimportservice.dart`.
+
+---
+
+## 1.2 Deuda aceptada (fuera de esta entrega, a propósito)
+
+| # | Hallazgo | Por qué no se cierra ahora |
+|---|---|---|
+| **H3** | El log del backfill reporta un solo `bodega_id` ajeno (`LIMIT 1` sin `ORDER BY`), no determinista si hay varios dueños distintos entre sí. | El diagnóstico completo ya existe — es H1 (`inspeccionarTabla`), que sí lista todos. Cambiar también el log interno del backfill es cosmético una vez que la herramienta de verdad (H1) está disponible; no justifica tocar `_backfillTabla` de nuevo en esta entrega. |
+| **H4** | Se reporta `ambiguous` aunque la tabla no tenga ninguna fila NULL pendiente (el chequeo de ambigüedad corre antes de preguntar si hay trabajo real por hacer). | Es ruido de log, no un riesgo de datos: ninguna fila se pierde ni queda mal estampada por este orden de chequeo. Se puede defender incluso como alerta legítima ("este dispositivo tiene datos de otra bodega"), solo habría que ajustar el texto del mensaje. |
+| **H6** | `bodega_id` no se consume todavía en ninguna lectura (ni los repositorios ni el dashboard filtran por él). | Es el alcance explícito de la Fase 1: columna + estampado + esquema. La Fase 1 **no entrega aislamiento local** — en un dispositivo compartido, la cuenta A sigue viendo el inventario de la cuenta B. Mitigación operativa mientras tanto: los 5 dispositivos piloto son dedicados, uno por bodega, no se comparten entre cuentas. El aislamiento real llega cuando las lecturas filtren (local) o del lado de la nube con las reglas ya validadas (`firestore.rules`). |
+| **H7** | `restore()` no restaura `providers` (preexistente, no introducido por esta rama). | No es un bug de la Fase 1: `backup()` nunca incluyó `providers`. Corregirlo toca `sync_service.dart`, explícitamente fuera de alcance en esta entrega. |
+| **H8** | El backfill se dispara sin `await` en cada emisión de `userStream`; dos emisiones seguidas podrían solapar dos corridas. | Es deliberado y está comentado en el código: el riesgo práctico es bajo porque la operación ya es idempotente (`UPDATE ... WHERE bodega_id IS NULL` converge sola) y no bloquear el arranque de la UI es un requisito explícito. No hay dato que se corrompa por una corrida solapada. |
 
 ---
 
@@ -282,6 +387,10 @@ Cloud Function.
 | Firestore sin colecciones normalizadas | ✅ Diseñado: `productos`/`ventas`/`compras` a nivel de ítem, consultable por rango de fecha y por `collectionGroup` |
 | Reglas para las colecciones nuevas | ✅ Escritas en `firestore.rules`, no desplegadas |
 | Quién estampa `bodega_id` en cada escritura nueva | ✅ Opción A implementada: los 3 repositorios lo estampan en el alta y lo preservan en cada edición |
-| Backfill del historial existente en cada dispositivo | ✅ Implementado con detección de ambigüedad por tabla, sin asumir una sola bodega por dispositivo (49/49 tests) |
+| Backfill del historial existente en cada dispositivo | ✅ Implementado con detección de ambigüedad por tabla, sin asumir una sola bodega por dispositivo |
+| El estampado con un uid real no tenía test (H5) | ✅ `AuthService` inyectable vía `UidProvider`, sin cambiar la superficie pública de los repositorios |
+| `insertReceiptForRestore` no estampaba `bodega_id` (H2) | ✅ Mismo criterio alta/preserva que el resto de `receipts`; descarta a propósito el `bodega_id` embebido de un backup ajeno |
+| Filas `ambiguous` sin forma de revisarlas (H1) | ✅ `inspeccionarTabla()`, solo lectura, lista NULLs y dueños en conflicto; la resolución sigue siendo manual, a propósito |
+| H3, H4, H6, H7, H8 | ⬜ Deuda aceptada a propósito — ver sección 1.2 |
 | Sync real hacia las colecciones nuevas (`sync_service.dart`) | ⬜ Fase 2, fuera de este alcance a propósito |
 | `firestore.indexes.json` | ⬜ Diferido hasta conocer la query real del training job |

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'uid_provider.dart';
 
-class AuthService {
+class AuthService implements UidProvider {
   AuthService._();
   static final AuthService instance = AuthService._();
 
@@ -16,6 +17,7 @@ class AuthService {
   /// sesión activa o si Firebase no está disponible todavía. A diferencia de
   /// [currentUser], nunca lanza: lo usan los repositorios para estampar
   /// bodega_id sin tener que manejar la excepción ellos mismos.
+  @override
   String? get currentUid {
     try {
       return _auth.currentUser?.uid;

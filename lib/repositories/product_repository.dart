@@ -1,11 +1,20 @@
 import 'package:conectamarket/models/products_model.dart';
 import 'package:conectamarket/repositories/database_helper.dart';
 import 'package:conectamarket/services/auth_service.dart';
+import 'package:conectamarket/services/uid_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 
 class ProductRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+
+  // Fuente del uid para estampar bodega_id. Por defecto, AuthService (que
+  // resuelve Firebase); se puede inyectar otra fuente en tests para probar
+  // el estampado con un uid real sin inicializar Firebase (ver H5 en
+  // docs/esquema_fase1_multi_bodega.md).
+  final UidProvider _uidProvider;
+
+  ProductRepository({UidProvider? uidProvider}) : _uidProvider = uidProvider ?? AuthService.instance;
 
   // Insertar o actualizar producto (Upsert)
   Future<void> upsertProduct(Product product) async {
@@ -23,7 +32,7 @@ class ProductRepository {
     );
     final String? bodegaId = existing.isNotEmpty
         ? existing.first['bodega_id'] as String?
-        : AuthService.instance.currentUid;
+        : _uidProvider.currentUid;
 
     await db.insert(
       'products',

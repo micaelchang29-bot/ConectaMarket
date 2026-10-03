@@ -2,11 +2,19 @@ import 'package:conectamarket/models/receipt_items_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
 import 'package:conectamarket/repositories/database_helper.dart';
 import 'package:conectamarket/services/auth_service.dart';
+import 'package:conectamarket/services/uid_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 
 class ReceiptRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+
+  // Ver product_repository.dart: misma fuente de uid inyectable para poder
+  // testear el estampado con un uid real (H5). La reutiliza tambien
+  // insertReceiptForRestore (H2).
+  final UidProvider _uidProvider;
+
+  ReceiptRepository({UidProvider? uidProvider}) : _uidProvider = uidProvider ?? AuthService.instance;
 
   // 1. Guardar Recibo con sus Items (Transacción)
   Future<void> saveFullReceipt(Receipt receipt, List<ReceiptItem> items) async {
@@ -27,7 +35,7 @@ class ReceiptRepository {
     );
     final String? bodegaId = existing.isNotEmpty
         ? existing.first['bodega_id'] as String?
-        : AuthService.instance.currentUid;
+        : _uidProvider.currentUid;
 
     await db.transaction((txn) async {
       // Insertar Cabecera
@@ -81,8 +89,26 @@ class ReceiptRepository {
   // Restore: inserta recibo + items sin tocar el stock (el snapshot ya lo tiene correcto)
   Future<void> insertReceiptForRestore(Map<String, dynamic> receipt, List<Map<String, dynamic>> items) async {
     final db = await _dbHelper.database;
+
+    // Mismo criterio que saveFullReceipt (alta -> estampa, edicion ->
+    // preserva). El valor de bodega_id que pueda venir ya embebido en
+    // [receipt] (si el backup se tomo desde una base v6+) se descarta a
+    // proposito: quien restaura es el dueno de los datos restaurados, no
+    // quien los subio originalmente a la nube (H2).
+    final String? receiptId = receipt['id'] as String?;
+    final existing = receiptId == null
+        ? const <Map<String, Object?>>[]
+        : await db.query('receipts', columns: ['bodega_id'], where: 'id = ?', whereArgs: [receiptId]);
+    final String? bodegaId = existing.isNotEmpty
+        ? existing.first['bodega_id'] as String?
+        : _uidProvider.currentUid;
+
     await db.transaction((txn) async {
-      await txn.insert('receipts', receipt, conflictAlgorithm: ConflictAlgorithm.replace);
+      await txn.insert(
+        'receipts',
+        {...receipt, 'bodega_id': bodegaId},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
       for (final item in items) {
         await txn.insert('receipt_items', item, conflictAlgorithm: ConflictAlgorithm.replace);
       }
