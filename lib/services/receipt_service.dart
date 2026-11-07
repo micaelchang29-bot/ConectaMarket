@@ -3,36 +3,83 @@ import 'package:conectamarket/models/receipt_items_model.dart';
 import 'package:conectamarket/models/receipts_model.dart';
 import 'package:conectamarket/repositories/receipt_repository.dart';
 import 'package:conectamarket/services/product_service.dart';
+import 'package:conectamarket/utils/periodos.dart';
 import 'package:intl/intl.dart';
 
+/// Línea de un comprobante para la lista de movimientos.
+class LineaMovimiento {
+  final String productId;
+  final String productNombre;
+  final double cantidad;
+  const LineaMovimiento(this.productId, this.productNombre, this.cantidad);
+}
+
+/// Comprobante con sus líneas, tal como se muestra en la lista.
+class MovimientoListado {
+  final Receipt receipt;
+  final String? providerNombre;
+  final List<LineaMovimiento> lineas;
+  const MovimientoListado(this.receipt, this.providerNombre, this.lineas);
+
+  /// Indica si alguna línea corresponde al texto buscado (nombre o SKU).
+  bool contieneProducto(String consulta) {
+    final q = consulta.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return lineas.any((l) =>
+        l.productNombre.toLowerCase().contains(q) || l.productId.toLowerCase().contains(q));
+  }
+}
+
+/// Agrupa las filas de [ReceiptRepository.getReceiptLines] en comprobantes,
+/// conservando el orden recibido (de la fecha más reciente a la más antigua).
+List<MovimientoListado> agruparLineas(List<Map<String, dynamic>> filas) {
+  final Map<String, MovimientoListado> porId = {};
+  for (final f in filas) {
+    final id = f['id'].toString();
+    final mov = porId.putIfAbsent(
+      id,
+      () => MovimientoListado(Receipt.fromMap(f), f['provider_nombre'] as String?, []),
+    );
+    if (f['product_id'] != null) {
+      final pid = f['product_id'].toString();
+      mov.lineas.add(LineaMovimiento(
+        pid,
+        (f['product_nombre'] as String?) ?? pid,
+        (f['cantidad'] as num?)?.toDouble() ?? 0,
+      ));
+    }
+  }
+  return porId.values.toList();
+}
+
 class ReceiptService {
+  static final ReceiptService _instance = ReceiptService._internal();
+  factory ReceiptService() => _instance;
+
   final ReceiptRepository _repo = ReceiptRepository();
   final DateFormat _dateFormatter = DateFormat('yyyy-MM-dd');
 
-  
-  // Stream para notificar a la UI cuando cambien los recibos
-  final _receiptController = StreamController<List<Receipt>>.broadcast();
-  Stream<List<Receipt>> get receiptStream => _receiptController.stream;
+  // Caché y stream compartidos por todas las pantallas
+  List<MovimientoListado>? _cached;
+  List<MovimientoListado>? get cachedMovements => _cached;
+  final _receiptController = StreamController<List<MovimientoListado>>.broadcast();
+  Stream<List<MovimientoListado>> get receiptStream => _receiptController.stream;
 
-  ReceiptService() {
+  ReceiptService._internal() {
     refreshReceipts();
   }
 
   Future<void> refreshReceipts() async {
-    final receipts = await _repo.getAllReceipts();
-    _receiptController.add(receipts);
+    final movimientos = agruparLineas(await _repo.getReceiptLines());
+    _cached = movimientos;
+    _receiptController.add(movimientos);
   }
 
-  // Lógica de negocio: Registro completo de recibo + items
+  // Lógica de negocio: Registro (o edición) completo de recibo + items
   Future<void> registerReceipt(Receipt receipt, List<ReceiptItem> items) async {
-    // Aquí puedes añadir validaciones de negocio antes de persistir
-    if (items.isEmpty) {
-      throw Exception("No se puede registrar un recibo sin ítems.");
-    }
-    
-    // Invocación al repositorio para la transacción atómica
+    // La validación de ítems, cantidades y stock vive en la transacción del repositorio
     await _repo.saveFullReceipt(receipt, items);
-    
+
     // Actualizar el estado de la UI
     await refreshReceipts();
     await ProductService().refreshProducts();
@@ -47,12 +94,11 @@ class ReceiptService {
     return items.fold(0.0, (sum, item) => sum + (item.cantidad * item.costoUnitario));
   }
 
-  // Lógica de borrado
+  // Borra el comprobante revirtiendo su efecto en el stock
   Future<void> deleteReceipt(String id) async {
     await _repo.deleteReceipt(id);
     await refreshReceipts();
-    // It shouldn't necessarily refresh products on delete, wait...
-    // The prompt only asked for "cada vez que se registre un recibo (ya sea de forma manual o mediante el servicio de importación de CSV), se actualice automáticamente el stock"
+    await ProductService().refreshProducts();
   }
 
   Future<void> deleteAllReceipts() async {
@@ -65,46 +111,42 @@ class ReceiptService {
   }
 
 
-  /// METODO PRINCIPAL: Orquesta el cálculo del balance financiero.
-  Future<Map<String, dynamic>> getFinancialBalance({required int year, required int month}) async {
+  /// METODO PRINCIPAL: Orquesta el cálculo del balance financiero del mes,
+  /// o del trimestre calendario que contiene al mes si [trimestral] es true.
+  Future<Map<String, dynamic>> getFinancialBalance({
+    required int year,
+    required int month,
+    bool trimestral = false,
+  }) async {
     // 1. Determinar el rango de fechas y la cantidad de días del período
-    final periodConfig = _calculatePeriodConfig(year, month);
-    final String startStr = _dateFormatter.format(periodConfig['start']);
-    final String endStr = _dateFormatter.format(periodConfig['end']);
+    final rango = rangoPeriodo(year, month, trimestral: trimestral);
+    final String startStr = _dateFormatter.format(rango.inicio);
+    final String endStr = _dateFormatter.format(rango.fin);
 
     // 2. Extraer la data transaccional cruda desde SQLite mediante el repositorio
-    final List<Map<String, dynamic>> rawItems = 
+    final List<Map<String, dynamic>> rawItems =
         await _repo.getDetailedBalanceItemsInRange(startStr, endStr);
 
     // 3. Inicializar la matriz base del calendario en RAM con valores en 0.0
-    final Map<String, Map<String, double>> calendarMatrix = 
-        _generateEmptyCalendarMatrix(periodConfig['start'], periodConfig['total_days']);
+    final Map<String, Map<String, double>> calendarMatrix =
+        _generateEmptyCalendarMatrix(rango.inicio, rango.dias);
 
     // 4. Volcar y acumular los montos reales calculados (cantidad * costoUnitario) sobre la matriz
     final Map<String, dynamic> processedData = _processAndAccumulateItems(rawItems, calendarMatrix);
 
     // 5. Formatear y construir los vectores primitivos finales limpios para la interfaz gráfica (UI)
-    return _formatFinalOutput(calendarMatrix, processedData);
+    return _formatFinalOutput(calendarMatrix, processedData, conMes: trimestral);
   }
 
   // ==========================================================
   // METODOS PRIVADOS SUB-DIVIDIDOS (Módulos de Soporte)
   // ==========================================================
 
-  /// Sub-Módulo 1: Calcula de forma estricta los límites temporales del período específico.
-  Map<String, dynamic> _calculatePeriodConfig(int year, int month) {
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0);
-    final totalDays = end.day;
-
-    return {'start': start, 'end': end, 'total_days': totalDays};
-  }
-
-  /// Sub-Módulo 2: Genera el mapa base del calendario (Calendar Master) para evitar días vacíos.
+  /// Genera el mapa base del calendario (Calendar Master) para evitar días vacíos.
   Map<String, Map<String, double>> _generateEmptyCalendarMatrix(DateTime start, int totalDays) {
     final Map<String, Map<String, double>> matrix = {};
     for (int i = 0; i < totalDays; i++) {
-      final DateTime day = start.add(Duration(days: i));
+      final DateTime day = DateTime(start.year, start.month, start.day + i);
       final String dayKey = _dateFormatter.format(day);
       matrix[dayKey] = {
         'ventas': 0.0,
@@ -114,9 +156,9 @@ class ReceiptService {
     return matrix;
   }
 
-  /// Sub-Módulo 3: Procesa el listado relacional e itera de forma matemática los subtotales.
+  /// Procesa el listado relacional e itera de forma matemática los subtotales.
   Map<String, dynamic> _processAndAccumulateItems(
-    List<Map<String, dynamic>> rawItems, 
+    List<Map<String, dynamic>> rawItems,
     Map<String, Map<String, double>> calendarMatrix,
   ) {
     double totalVentas = 0.0;
@@ -124,10 +166,10 @@ class ReceiptService {
 
     for (var row in rawItems) {
       final String fechaRow = row['fecha'];
-      final int tipoMov = row['tipomovimiento']; // 0 = Venta, 1 = Compra
-      final int cantidad = (row['cantidad'] as num).toInt();
+      final int tipoMov = (row['tipomovimiento'] as num).toInt(); // 0 = Venta, 1 = Compra
+      final double cantidad = (row['cantidad'] as num).toDouble();
       final double costoUnitario = (row['costoUnitario'] as num).toDouble();
-      
+
       // Aplicación matemática estricta: subtotal = cantidad * costoUnitario
       final double itemSubtotal = cantidad * costoUnitario;
 
@@ -145,11 +187,12 @@ class ReceiptService {
     return {'total_ventas': totalVentas, 'total_compras': totalCompras};
   }
 
-  /// Sub-Módulo 4: Convierte la matriz interna estructurada en listas primitivas para los gráficos.
+  /// Convierte la matriz interna estructurada en listas primitivas para los gráficos.
   Map<String, dynamic> _formatFinalOutput(
-    Map<String, Map<String, double>> calendarMatrix, 
-    Map<String, dynamic> processedData,
-  ) {
+    Map<String, Map<String, double>> calendarMatrix,
+    Map<String, dynamic> processedData, {
+    bool conMes = false,
+  }) {
     final sortedKeys = calendarMatrix.keys.toList()..sort();
     final List<double> vectorVentas = [];
     final List<double> vectorCompras = [];
@@ -158,7 +201,8 @@ class ReceiptService {
     for (var key in sortedKeys) {
       vectorVentas.add(calendarMatrix[key]!['ventas']!);
       vectorCompras.add(calendarMatrix[key]!['compras']!);
-      etiquetasX.add(DateTime.parse(key).day.toString()); // Extrae solo el número de día
+      final d = DateTime.parse(key);
+      etiquetasX.add(conMes ? '${d.day}/${d.month}' : d.day.toString());
     }
 
     final double ventas = processedData['total_ventas'];

@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../utils/mensajes_error.dart';
 
 enum _Mode { login, register }
 
@@ -52,21 +54,19 @@ class _LoginDialogState extends State<LoginDialog> {
         );
       }
       if (mounted) Navigator.of(context).pop(true);
-    } on Exception catch (e) {
-      setState(() => _error = _friendlyError(e.toString()));
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() => _error = mensajeErrorAuth(e.code, esRegistro: _mode == _Mode.register));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = esErrorDeConexion(e)
+            ? mensajeSinConexion
+            : 'No se pudo completar la operación. Inténtalo de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  String _friendlyError(String raw) {
-    if (raw.contains('wrong-password') || raw.contains('invalid-credential')) {
-      return 'Correo o contraseña incorrectos.';
-    }
-    if (raw.contains('email-already-in-use')) return 'Ese correo ya está registrado.';
-    if (raw.contains('weak-password')) return 'La contraseña debe tener al menos 6 caracteres.';
-    if (raw.contains('user-not-found')) return 'No existe una cuenta con ese correo.';
-    return 'Error: $raw';
   }
 
   @override
@@ -113,7 +113,7 @@ class _LoginDialogState extends State<LoginDialog> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Necesitas una cuenta para usar el Chat IA.',
+                'Necesitas una cuenta para el respaldo en la nube y el Chat IA.',
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 20),

@@ -5,6 +5,7 @@ import '../services/csvimportservice.dart';
 import '../services/product_service.dart';
 import '../services/receipt_service.dart';
 import '../widgets_global/header_bar.dart';
+import '../utils/mensajes_error.dart';
 
 class ImportCsvScreen extends StatefulWidget {
   const ImportCsvScreen({super.key});
@@ -49,12 +50,12 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
           _fileName = null;
           _filePath = null;
         });
-        _showImportSummary(result.imported, result.errors);
+        _showImportSummary(result.imported, result.errors, comprobantes: result.comprobantes);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al importar: $e')),
+          SnackBar(content: Text(mensajeAmigable(e, porDefecto: 'No se pudo leer el archivo.'))),
         );
       }
     } finally {
@@ -62,7 +63,7 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
     }
   }
 
-  void _showImportSummary(int imported, List<String> errors) {
+  void _showImportSummary(int imported, List<String> errors, {int? comprobantes}) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -77,7 +78,12 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
                 children: [
                   const Icon(Icons.check_circle, color: Color(0xFF005440)),
                   const SizedBox(width: 8),
-                  Text('$imported fila(s) importadas correctamente'),
+                  Expanded(
+                    child: Text(
+                      '$imported fila(s) importadas correctamente'
+                      '${comprobantes != null ? ' ($comprobantes comprobante(s))' : ''}',
+                    ),
+                  ),
                 ],
               ),
               if (errors.isNotEmpty) ...[
@@ -159,7 +165,7 @@ class _ImportCsvScreenState extends State<ImportCsvScreen> {
     } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al eliminar: $e')),
+        SnackBar(content: Text(mensajeAmigable(e, porDefecto: 'No se pudo eliminar.'))),
       );
     }
     } finally {

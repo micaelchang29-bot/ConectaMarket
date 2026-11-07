@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/providers_model.dart';
+import '../../services/provider_export_service.dart';
+import '../../utils/validaciones.dart';
 import '../../services/provider_service.dart';
 import 'package:go_router/go_router.dart';
 import '../../widgets_global/header_bar.dart';
@@ -49,13 +52,44 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
             const SnackBar(content: Text("Proveedor eliminado exitosamente"), backgroundColor: Color(0xFF005440)),
           );
         }
-      } catch (e) {
+      } on AppException catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: const Color(0xFFBA1A1A)),
+            SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFBA1A1A)),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("No se pudo eliminar el proveedor."),
+              backgroundColor: Color(0xFFBA1A1A),
+            ),
           );
         }
       }
+    }
+  }
+
+  Future<void> _exportar(BuildContext context) async {
+    final proveedores = ProviderService().cachedProviders;
+    final messenger = ScaffoldMessenger.of(context);
+    if (proveedores.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text("No hay proveedores para exportar.")),
+      );
+      return;
+    }
+    try {
+      final path = await ProviderExportService().exportar(proveedores);
+      await Share.shareXFiles([XFile(path)]);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("No se pudo exportar la lista de proveedores."),
+          backgroundColor: Color(0xFFBA1A1A),
+        ),
+      );
     }
   }
 
@@ -75,7 +109,13 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
               title: "Mis Proveedores",
               badgeCount: count,
               showBackButton: false,
-              actions: [],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.file_download_outlined, color: Color(0xFF005440)),
+                  tooltip: 'Exportar proveedores a Excel',
+                  onPressed: () => _exportar(context),
+                ),
+              ],
             );
           },
         ),
@@ -132,10 +172,16 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                   }).toList();
 
                   if (filteredList.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        "No se encontraron proveedores",
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          snapshot.data!.isEmpty
+                              ? "Aún no tienes proveedores. Toca + para agregar el primero."
+                              : "No se encontraron proveedores",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
                       ),
                     );
                   }

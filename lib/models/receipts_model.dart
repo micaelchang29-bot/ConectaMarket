@@ -25,10 +25,10 @@ class Receipt {
   };
 
   factory Receipt.fromMap(Map<String, dynamic> map) => Receipt(
-    id: map['id'],
-    providerId: map['provider_id'] ?? '',
-    fecha: map['fecha'],
-    total: map['total'],
+    id: map['id'].toString(),
+    providerId: map['provider_id']?.toString() ?? '',
+    fecha: map['fecha'].toString(),
+    total: (map['total'] as num?)?.toDouble() ?? 0,
     tipomovimiento: (map['tipomovimiento'] ?? 0) == 1,
     serie: map['serie'] ?? 'B001',
   );

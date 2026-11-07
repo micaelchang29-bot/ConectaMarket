@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../services/receipt_service.dart';
 import '../month_selector_widget.dart';
+import '../../utils/periodos.dart';
 import 'dashboard_ui_helpers.dart';
 
 class FinancialBalanceCard extends StatefulWidget {
@@ -12,8 +13,10 @@ class FinancialBalanceCard extends StatefulWidget {
 }
 
 class _FinancialBalanceCardState extends State<FinancialBalanceCard> {
-  int _selectedYear = 2026;
-  int _selectedMonth = 5;
+  // Abre en el mes actual
+  int _selectedYear = DateTime.now().year;
+  int _selectedMonth = DateTime.now().month;
+  bool _trimestral = false;
 
   @override
   Widget build(BuildContext context) {
@@ -27,15 +30,29 @@ class _FinancialBalanceCardState extends State<FinancialBalanceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
+              const Expanded(
                 child: Text(
                   "Balance del Período",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  selectedBackgroundColor: const Color(0xFFE8F5E9),
+                  selectedForegroundColor: const Color(0xFF0F6E56),
+                ),
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Mes')),
+                  ButtonSegment(value: true, label: Text('Trimestre')),
+                ],
+                selected: {_trimestral},
+                onSelectionChanged: (sel) => setState(() => _trimestral = sel.first),
               ),
             ],
           ),
@@ -50,9 +67,22 @@ class _FinancialBalanceCardState extends State<FinancialBalanceCard> {
               });
             },
           ),
+          if (_trimestral) ...[
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                etiquetaTrimestre(_selectedYear, _selectedMonth),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F6E56)),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           FutureBuilder<Map<String, dynamic>>(
-            future: ReceiptService().getFinancialBalance(year: _selectedYear, month: _selectedMonth),
+            future: ReceiptService().getFinancialBalance(
+              year: _selectedYear,
+              month: _selectedMonth,
+              trimestral: _trimestral,
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -60,7 +90,10 @@ class _FinancialBalanceCardState extends State<FinancialBalanceCard> {
                 );
               }
               if (snapshot.hasError) {
-                return Text("Error: ${snapshot.error}", style: const TextStyle(color: Color(0xFFBA1A1A)));
+                return const Text(
+                  "No se pudo calcular el balance del período.",
+                  style: TextStyle(color: Color(0xFFBA1A1A)),
+                );
               }
 
               final data = snapshot.data ?? {};

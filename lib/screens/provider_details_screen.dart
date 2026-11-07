@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/providers_model.dart';
 import '../../services/provider_service.dart';
 import '../../widgets_global/header_bar.dart';
+import '../../utils/validaciones.dart';
 
 class ProviderDetailsScreen extends StatefulWidget {
   final Provider? provider; // null = Modo Creación, con data = Modo Edición
@@ -22,6 +23,8 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
 
   bool _isEditMode = false;
   String? _rucErrorMessage; // Control dinámico de error para el input RUC
+  String? _telefonoErrorMessage;
+  String? _nombreErrorMessage;
 
   @override
   void initState() {
@@ -44,7 +47,12 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
 
   /// Ejecuta la persistencia asíncrona hacia el servicio e intercepta errores
   Future<void> _handleSave() async {
-    setState(() => _rucErrorMessage = null); // Resetea errores visuales
+    setState(() {
+      // Resetea errores visuales
+      _rucErrorMessage = null;
+      _telefonoErrorMessage = null;
+      _nombreErrorMessage = null;
+    });
 
     if (!_formKey.currentState!.validate()) return;
 
@@ -72,11 +80,29 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
         );
         context.pop(); // Regresa al catálogo refrescado
       }
-    } catch (e) {
-      // Captura el throw Exception de longitud o prefijo incorrecto (10,15,17,20)
+    } on AppException catch (e) {
+      // Errores del servicio (RUC repetido, formato) dentro del campo afectado
       setState(() {
-        _rucErrorMessage = e.toString().replaceAll("Exception: ", "");
+        switch (e.campo) {
+          case 'telefono':
+            _telefonoErrorMessage = e.message;
+            break;
+          case 'nombre':
+            _nombreErrorMessage = e.message;
+            break;
+          default:
+            _rucErrorMessage = e.message;
+        }
       });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo guardar el proveedor. Inténtalo de nuevo.'),
+            backgroundColor: Color(0xFFBA1A1A),
+          ),
+        );
+      }
     }
   }
 
@@ -114,6 +140,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF005440))),
+                  errorText: _nombreErrorMessage,
                 ),
                 validator: (val) => val == null || val.trim().isEmpty ? "El nombre comercial es obligatorio" : null,
               ),
@@ -149,6 +176,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
                   errorText: _rucErrorMessage,
                   errorMaxLines: 2,
                 ),
+                validator: (v) => validarRuc(v),
               ),
               if (_rucErrorMessage == null) ...[
                 const SizedBox(height: 4),
@@ -176,7 +204,15 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF005440))),
+                  errorText: _telefonoErrorMessage,
+                  errorMaxLines: 2,
                 ),
+                validator: (v) => validarTelefono(v),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "Al menos 9 dígitos",
+                style: TextStyle(fontSize: 12, color: Color(0xFF3F4944)),
               ),
               const SizedBox(height: 24),
 
@@ -203,7 +239,7 @@ class _ProviderDetailsScreenState extends State<ProviderDetailsScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            "El RUC será validado automáticamente con los registros oficiales al guardar.",
+                            "Al guardar se valida el formato del RUC (11 dígitos que empiezan con 10, 15, 17 o 20) y que no esté registrado en otro proveedor.",
                             style: TextStyle(color: Color(0xFF3F4944), fontSize: 13),
                           ),
                         ],

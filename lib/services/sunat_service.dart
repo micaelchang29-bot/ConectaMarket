@@ -1,4 +1,5 @@
 import 'package:conectamarket/repositories/receipt_repository.dart';
+import 'package:conectamarket/utils/validaciones.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -52,6 +53,9 @@ class SunatService {
 
   Future<String> exportToExcel(int year, int month) async {
     final rows = await buildRegistroVentasRows(year, month);
+    if (rows.isEmpty) {
+      throw const AppException('No hay ventas registradas en este período. No se generó ningún archivo.');
+    }
 
     final excel = Excel.createExcel();
     final sheet = excel['Registro de Ventas'];

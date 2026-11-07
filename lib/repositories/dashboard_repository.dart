@@ -145,6 +145,7 @@ class DashboardRepository {
         WHERE strftime('%Y', r.fecha) = ?
           AND strftime('%m', r.fecha) = ?
         GROUP BY ri.product_id
+        HAVING SUM(CASE WHEN r.tipomovimiento = 0 THEN 1 ELSE 0 END) > 0
         ORDER BY ganancia DESC
         LIMIT 1
       ''', [year.toString(), month.toString().padLeft(2, '0')]);

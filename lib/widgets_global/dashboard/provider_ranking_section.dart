@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/dashboard_service.dart';
+import '../../services/provider_service.dart';
 
 class ProviderRankingSection extends StatelessWidget {
   const ProviderRankingSection({super.key});
@@ -18,19 +19,35 @@ class ProviderRankingSection extends StatelessWidget {
     Color(0xFF283593),
   ];
 
+  /// Ranking y, a la vez, la lista de proveedores (para los que no tienen historial).
+  Future<List<Map<String, dynamic>>> _cargar() async {
+    final resultados = await Future.wait([
+      DashboardAiService().getProviderRanking(),
+      ProviderService().refreshProviders(),
+    ]);
+    return resultados.first as List<Map<String, dynamic>>;
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: DashboardAiService().getProviderRanking(),
+      future: _cargar(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         final providers = snapshot.data ?? [];
+        final rankeados = providers.map((p) => p['id']).toSet();
+        final sinHistorial = ProviderService()
+            .cachedProviders
+            .where((p) => !rankeados.contains(p.id))
+            .map((p) => p.nombre)
+            .toList()
+          ..sort();
 
         if (providers.isEmpty) {
-          return Container(
+          final aviso = Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF3E0),
@@ -50,11 +67,16 @@ class ProviderRankingSection extends StatelessWidget {
               ],
             ),
           );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [aviso, if (sinHistorial.isNotEmpty) _buildSinHistorial(sinHistorial)],
+          );
         }
 
-        final int displayCount = providers.length > 4 ? 4 : providers.length;
+        // Se muestran todos los proveedores con historial, ordenados por puntaje
+        final int displayCount = providers.length;
 
-        return GridView.count(
+        final grid = GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -67,8 +89,9 @@ class ProviderRankingSection extends StatelessWidget {
             final int score = (provider['global_score'] as num?)?.toInt() ?? 0;
             final String recommendation = provider['recommendation'] ?? '';
             final int compras = (provider['num_compras'] as num?)?.toInt() ?? 0;
-            final Color bg = _bgColors[index];
-            final Color tc = _textColors[index];
+            final int estilo = index < _bgColors.length ? index : _bgColors.length - 1;
+            final Color bg = _bgColors[estilo];
+            final Color tc = _textColors[estilo];
 
             return Container(
               padding: const EdgeInsets.all(16),
@@ -92,7 +115,7 @@ class ProviderRankingSection extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(_medals[index], style: const TextStyle(fontSize: 18)),
+                      Text(_medals[estilo], style: const TextStyle(fontSize: 18)),
                     ],
                   ),
                   Column(
@@ -119,7 +142,50 @@ class ProviderRankingSection extends StatelessWidget {
             );
           }),
         );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [grid, if (sinHistorial.isNotEmpty) _buildSinHistorial(sinHistorial)],
+        );
       },
+    );
+  }
+
+  /// Proveedores sin compras en los últimos 12 meses: se listan sin puntaje.
+  Widget _buildSinHistorial(List<String> nombres) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F3F4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDADCE0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Sin historial suficiente (sin puntaje)",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF3F4944)),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Aún no tienen compras registradas en los últimos 12 meses.",
+            style: TextStyle(fontSize: 11, color: Color(0xFF5F6368)),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: nombres
+                .map((n) => Chip(
+                      label: Text(n, style: const TextStyle(fontSize: 11)),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: Colors.white,
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
     );
   }
 }

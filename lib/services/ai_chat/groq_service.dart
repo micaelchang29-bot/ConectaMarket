@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../utils/mensajes_error.dart';
+import '../../utils/validaciones.dart';
 import 'ai_chat_interface.dart';
 
 class GroqService implements AiChatService {
@@ -10,7 +12,9 @@ class GroqService implements AiChatService {
   Future<String> ask(String question, String context) async {
     final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
 
-    final response = await http.post(
+    final http.Response response;
+    try {
+      response = await http.post(
       uri,
       headers: {
         'Content-Type': 'application/json',
@@ -35,12 +39,16 @@ class GroqService implements AiChatService {
         'temperature': 0.7,
         'max_tokens': 1024,
       }),
-    );
+    ).timeout(const Duration(seconds: 30));
+    } catch (e) {
+      if (esErrorDeConexion(e)) throw const AppException(mensajeSinConexion);
+      throw const AppException('No se pudo obtener respuesta del asistente.');
+    }
 
     if (response.statusCode == 200) {
       final data = jsonDecode(utf8.decode(response.bodyBytes));
       return data['choices'][0]['message']['content'] as String;
     }
-    throw Exception('Groq error ${response.statusCode}: ${response.body}');
+    throw AppException(mensajeErrorAsistente(response.statusCode));
   }
 }

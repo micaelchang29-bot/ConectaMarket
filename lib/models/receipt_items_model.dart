@@ -25,7 +25,7 @@ class ReceiptItem {
     id: map['id'],
     receiptId: map['receipt_id'],
     productId: map['product_id'],
-    cantidad: map['cantidad'],
-    costoUnitario: map['costoUnitario'],
+    cantidad: (map['cantidad'] as num).toDouble(),
+    costoUnitario: (map['costoUnitario'] as num).toDouble(),
   );
 }

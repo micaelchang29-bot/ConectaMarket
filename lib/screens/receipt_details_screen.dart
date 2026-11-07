@@ -8,6 +8,8 @@ import '../../services/product_service.dart';
 import '../../services/provider_service.dart';
 import 'product_details_addproduct_screen.dart';
 import '../../widgets_global/header_bar.dart';
+import '../../utils/mensajes_error.dart';
+import '../../utils/validaciones.dart';
 
 class ReceiptDetailsScreen extends StatefulWidget {
   final Receipt? receipt; // null = CREACIÓN, objeto = EDICIÓN
@@ -28,6 +30,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
   late TextEditingController _providerController;
   List<ReceiptItem> _items = [];
   bool _isLoadingDetails = false;
+  bool _guardando = false;
   late String _currentReceiptId;
   late String _serie;
 
@@ -57,11 +60,11 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
     setState(() => _isLoadingDetails = true);
     try {
       final details = await _receiptService.getReceiptDetails(widget.receipt!.id);
-      setState(() => _items = details);
+      if (mounted) setState(() => _items = details);
     } catch (e) {
-      _showNotification("Error al cargar ítems: $e", isError: true);
+      if (mounted) _showNotification("No se pudieron cargar los productos del comprobante.", isError: true);
     } finally {
-      setState(() => _isLoadingDetails = false);
+      if (mounted) setState(() => _isLoadingDetails = false);
     }
   }
 
@@ -76,6 +79,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       return;
     }
 
+    setState(() => _guardando = true);
     try {
       final id = _currentReceiptId;
       
@@ -88,18 +92,61 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
         fecha: _fechaOperacion.toIso8601String(),
         total: total,
         providerId: _isCompra ? _providerController.text.trim() : '',
+        serie: _serie,
       );
 
       await _receiptService.registerReceipt(receipt, _items);
-      await ProductService().refreshProducts();
 
       if (mounted) {
         _showNotification("Movimiento procesado con éxito");
         context.pop();
       }
     } catch (e) {
-      _showNotification("Error al procesar: $e", isError: true);
+      if (mounted) {
+        _showNotification(mensajeAmigable(e, porDefecto: 'No se pudo guardar el movimiento.'), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  Future<void> _handleDelete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar comprobante'),
+        content: const Text(
+          'Se eliminará el comprobante y se revertirá su efecto en el stock '
+          '(una venta devuelve las unidades; una compra las descuenta). ¿Continuar?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await _receiptService.deleteReceipt(widget.receipt!.id);
+      if (!mounted) return;
+      _showNotification("Comprobante eliminado y stock actualizado");
+      context.pop();
+    } catch (e) {
+      if (mounted) {
+        _showNotification(mensajeAmigable(e, porDefecto: 'No se pudo eliminar el comprobante.'), isError: true);
+      }
+    }
+  }
+
+  String _nombreProducto(String productId) {
+    final productos = ProductService().cachedProducts ?? [];
+    for (final p in productos) {
+      if (p.id == productId) return p.nombre;
+    }
+    return productId;
   }
 
   void _showNotification(String message, {bool isError = false}) {
@@ -125,11 +172,8 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () async {
-                await _receiptService.deleteReceipt(widget.receipt!.id);
-                await ProductService().refreshProducts();
-                if (mounted) context.pop();
-              },
+              tooltip: 'Eliminar comprobante',
+              onPressed: _handleDelete,
             ),
         ],
       ),
@@ -293,8 +337,11 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                                     return Card(
                                       color: Colors.white,
                                       child: ListTile(
-                                        title: Text("Producto: ${item.productId}"),
-                                        subtitle: Text("Cant: ${item.cantidad}  •  S/. ${item.costoUnitario}"),
+                                        title: Text(_nombreProducto(item.productId)),
+                                        subtitle: Text(
+                                          "SKU: ${item.productId}  •  Cant: ${formatoCantidad(item.cantidad)}  •  "
+                                          "S/. ${item.costoUnitario.toStringAsFixed(2)}",
+                                        ),
                                         trailing: IconButton(
                                           icon: const Icon(Icons.delete_outline, color: Colors.red),
                                           onPressed: () => setState(() => _items.removeAt(index)),
@@ -321,7 +368,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                             ],
                           ),
                           ElevatedButton(
-                            onPressed: _handleSave,
+                            onPressed: _guardando ? null : _handleSave,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF005440),
                               foregroundColor: Colors.white,

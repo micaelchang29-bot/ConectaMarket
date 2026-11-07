@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/providers_model.dart';
 import '../repositories/provider_repository.dart';
+import '../utils/validaciones.dart';
 import 'dart:math';
 
 class ProviderService {
@@ -30,12 +31,29 @@ class ProviderService {
     _providerController.add(providers);
   }
 
-  // Lógica de negocio: Validar RUC (11 dígitos) antes de guardar
-  Future<void> saveProvider(Provider provider) async {
-    if (provider.ruc != null && !RegExp(r'^\d{11}$').hasMatch(provider.ruc!)) {
-      throw Exception("El RUC debe tener exactamente 11 dígitos numéricos");
+  /// Reglas de formato y unicidad. El RUC y el teléfono se validan cuando vienen;
+  /// su obligatoriedad la impone el formulario. Lanza [AppException] con el campo.
+  Future<void> validarProveedor(Provider provider) async {
+    if (provider.nombre.trim().isEmpty) {
+      throw const AppException('El nombre comercial es obligatorio', campo: 'nombre');
     }
-    
+    final errorRuc = validarRuc(provider.ruc, obligatorio: false);
+    if (errorRuc != null) throw AppException(errorRuc, campo: 'ruc');
+    final errorTel = validarTelefono(provider.telefono, obligatorio: false);
+    if (errorTel != null) throw AppException(errorTel, campo: 'telefono');
+
+    final ruc = provider.ruc?.trim();
+    if (ruc != null && ruc.isNotEmpty) {
+      final todos = await _repo.getAllProviders();
+      final repetido = todos.where((p) => p.id != provider.id && p.ruc?.trim() == ruc);
+      if (repetido.isNotEmpty) {
+        throw AppException('El RUC ya está registrado para "${repetido.first.nombre}"', campo: 'ruc');
+      }
+    }
+  }
+
+  Future<void> saveProvider(Provider provider) async {
+    await validarProveedor(provider);
     await _repo.upsertProvider(provider);
     await refreshProviders(); // Actualizar UI tras el cambio
   }
@@ -48,7 +66,15 @@ class ProviderService {
     ).toList();
   }
 
+  /// Elimina el proveedor solo si no tiene comprobantes asociados.
   Future<void> removeProvider(String id) async {
+    final compras = await _repo.countReceiptsByProvider(id);
+    if (compras > 0) {
+      throw AppException(
+        'No se puede eliminar el proveedor: tiene $compras '
+        '${compras == 1 ? 'comprobante asociado' : 'comprobantes asociados'}.',
+      );
+    }
     await _repo.deleteProvider(id);
     await refreshProviders();
   }
@@ -80,7 +106,7 @@ class ProviderService {
     for (var row in history) {
       final String id = row['provider_id'];
       final String name = row['provider_name'];
-      final double cost = row['cost'];
+      final double cost = (row['cost'] as num).toDouble();
 
       providerNames[id] = name;
       providerCosts.putIfAbsent(id, () => []).add(cost);

@@ -1,8 +1,8 @@
-import 'package:conectamarket/models/receipts_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/receipt_service.dart';
+import '../../utils/validaciones.dart';
 import '../../widgets_global/base_card.dart';
 import '../../widgets_global/header_bar.dart';
 
@@ -15,7 +15,21 @@ class ReceiptListScreen extends StatefulWidget {
 
 class _ReceiptListScreenState extends State<ReceiptListScreen> {
   final ReceiptService _service = ReceiptService();
+  final TextEditingController _busquedaController = TextEditingController();
   bool _mostrarCompras = false;
+  String _busqueda = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _service.refreshReceipts();
+  }
+
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
+  }
 
   String _formatDate(String isoDate) {
     try {
@@ -26,15 +40,27 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
     }
   }
 
+  List<MovimientoListado> _filtrar(List<MovimientoListado> todos) => todos
+      .where((m) => m.receipt.tipomovimiento == _mostrarCompras && m.contieneProducto(_busqueda))
+      .toList();
+
+  String _resumenLineas(MovimientoListado m) {
+    if (m.lineas.isEmpty) return 'Sin productos';
+    final partes = m.lineas.take(3).map((l) => '${l.productNombre} × ${formatoCantidad(l.cantidad)}');
+    final resto = m.lineas.length - 3;
+    return partes.join(', ') + (resto > 0 ? ' y $resto más' : '');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: StreamBuilder<List<Receipt>>(
+        child: StreamBuilder<List<MovimientoListado>>(
           stream: _service.receiptStream,
+          initialData: _service.cachedMovements,
           builder: (context, snapshot) {
-            final count = snapshot.data?.where((r) => r.tipomovimiento == _mostrarCompras).length ?? 0;
+            final count = _filtrar(snapshot.data ?? []).length;
             return HeaderBarWidget(
               title: "Comprobantes",
               badgeCount: count,
@@ -84,25 +110,59 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _busquedaController,
+                onChanged: (v) => setState(() => _busqueda = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Filtrar por producto o SKU',
+                  suffixIcon: _busqueda.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _busquedaController.clear();
+                            setState(() => _busqueda = '');
+                          },
+                        ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
             Expanded(
-              child: StreamBuilder<List<Receipt>>(
+              child: StreamBuilder<List<MovimientoListado>>(
                 stream: _service.receiptStream,
+                initialData: _service.cachedMovements,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                  
-                  final receipts = snapshot.data!.where((r) => r.tipomovimiento == _mostrarCompras).toList();
 
-                  if (receipts.isEmpty) {
-                    return Center(child: Text("No hay ${_mostrarCompras ? 'compras' : 'ventas'} registradas."));
+                  // Ya vienen ordenados del más reciente al más antiguo
+                  final movimientos = _filtrar(snapshot.data!);
+                  final tipo = _mostrarCompras ? 'compras' : 'ventas';
+
+                  if (movimientos.isEmpty) {
+                    return Center(
+                      child: Text(_busqueda.trim().isEmpty
+                          ? "No hay $tipo registradas."
+                          : "No hay $tipo con ese producto."),
+                    );
                   }
 
                   return ListView.builder(
-                    itemCount: receipts.length,
+                    itemCount: movimientos.length,
                     itemBuilder: (context, index) {
-                      final r = receipts[index];
+                      final m = movimientos[index];
+                      final r = m.receipt;
+                      final tipoTexto = r.tipomovimiento ? 'Compra' : 'Venta';
+                      final proveedor = r.tipomovimiento && (m.providerNombre ?? '').isNotEmpty
+                          ? ' · ${m.providerNombre}'
+                          : '';
                       return BaseCardWidget(
-                        title: "Doc: ${r.id}", // O tu formato de serie-número
-                        subtitle: "${_formatDate(r.fecha)} | ${r.providerId}",
+                        title: "${_formatDate(r.fecha)} · $tipoTexto$proveedor",
+                        subtitle: "${_resumenLineas(m)}\nDoc: ${r.serie}-${r.id}",
                         priceOrStatus: "S/. ${r.total.toStringAsFixed(2)}",
                         onTap: () {
                           // Navegar a detalles/edición (pantalla única para crear/editar)
@@ -121,6 +181,7 @@ class _ReceiptListScreenState extends State<ReceiptListScreen> {
         backgroundColor: const Color(0xFF0F6E56),
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        tooltip: 'Registrar movimiento',
         onPressed: () => context.push('/receipt-form'),
         child: const Icon(Icons.add, size: 28),
       ),

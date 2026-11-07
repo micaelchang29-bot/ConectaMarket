@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/ai_chat/ai_factory.dart';
 import '../services/auth_service.dart';
+import '../services/conexion_service.dart';
+import '../utils/mensajes_error.dart';
 import '../services/dashboard_service.dart';
 import '../widgets_global/login_dialog.dart';
 
@@ -16,6 +18,19 @@ class _StockChatScreenState extends State<StockChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<_Message> _history = [];
   bool _isLoading = false;
+  bool _sinConexion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _verificarConexion();
+  }
+
+  Future<bool> _verificarConexion() async {
+    final ok = await ConexionService.hayConexion(host: 'api.groq.com');
+    if (mounted) setState(() => _sinConexion = !ok);
+    return ok;
+  }
 
   @override
   void dispose() {
@@ -67,6 +82,9 @@ class _StockChatScreenState extends State<StockChatScreen> {
     final question = _controller.text.trim();
     if (question.isEmpty || _isLoading) return;
 
+    if (!await _verificarConexion()) return;
+    if (!mounted) return;
+
     if (AuthService.instance.currentUser == null) {
       final authenticated = await LoginDialog.show(context);
       if (!authenticated) return;
@@ -89,12 +107,12 @@ class _StockChatScreenState extends State<StockChatScreen> {
       setState(() {
         _history.add(_Message(
           role: _Role.assistant,
-          text: 'Error al consultar la IA: ${e.toString()}',
+          text: mensajeAmigable(e, porDefecto: 'No se pudo obtener respuesta del asistente.'),
           isError: true,
         ));
       });
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _scrollToBottom();
     }
   }
@@ -139,6 +157,25 @@ class _StockChatScreenState extends State<StockChatScreen> {
       ),
       body: Column(
         children: [
+          if (_sinConexion)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFFFF3E0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, color: Color(0xFF704200)),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      mensajeSinConexion,
+                      style: TextStyle(fontSize: 13, color: Color(0xFF704200)),
+                    ),
+                  ),
+                  TextButton(onPressed: _verificarConexion, child: const Text('Reintentar')),
+                ],
+              ),
+            ),
           Expanded(
             child: _history.isEmpty
                 ? _buildEmptyState()

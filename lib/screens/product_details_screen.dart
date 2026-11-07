@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/products_model.dart';
 import '../../services/product_service.dart';
 import '../../widgets_global/header_bar.dart';
+import '../../utils/validaciones.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   final Product? product; // Si es null, es modo CREACIÓN
@@ -22,6 +23,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   late TextEditingController _nombreController;
   late TextEditingController _stockController;
   late TextEditingController _umbralController;
+  late TextEditingController _precioController;
+
+  // Errores que vienen del servicio (duplicados), mostrados dentro del campo
+  final Map<String, String?> _erroresServicio = {};
+  bool _guardando = false;
 
   @override
   void initState() {
@@ -29,8 +35,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     // Inicializar controladores con datos existentes o vacíos
     _skuController = TextEditingController(text: widget.product?.id ?? '');
     _nombreController = TextEditingController(text: widget.product?.nombre ?? '');
-    _stockController = TextEditingController(text: widget.product?.stock.toString() ?? '0');
+    _stockController = TextEditingController(
+        text: widget.product != null ? formatoCantidad(widget.product!.stock) : '0');
     _umbralController = TextEditingController(text: widget.product?.umbralAlerta.toString() ?? '5');
+    _precioController = TextEditingController(
+        text: widget.product != null && widget.product!.precio > 0
+            ? widget.product!.precio.toStringAsFixed(2)
+            : '');
   }
   
   @override
@@ -39,26 +50,87 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _nombreController.dispose();
     _stockController.dispose();
     _umbralController.dispose();
+    _precioController.dispose();
     super.dispose();
   }
 
   Future<void> _saveProduct() async {
+    setState(() => _erroresServicio.clear());
     if (!_formKey.currentState!.validate()) return;
 
+    final isEditing = widget.product != null;
     final newProduct = Product(
-      id: _skuController.text,
-      nombre: _nombreController.text,
-      stock: double.tryParse(_stockController.text) ?? 0,
-      umbralAlerta: int.tryParse(_umbralController.text) ?? 5,
+      id: _skuController.text.trim(),
+      nombre: _nombreController.text.trim(),
+      stock: parseDecimal(_stockController.text) ?? 0,
+      umbralAlerta: int.tryParse(_umbralController.text.trim()) ?? 5,
+      precio: parseDecimal(_precioController.text) ?? 0,
     );
 
-    await _service.saveProduct(newProduct);
-    if (mounted) context.pop();
+    setState(() => _guardando = true);
+    try {
+      await _service.saveProduct(newProduct, esNuevo: !isEditing);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isEditing ? 'Producto actualizado' : 'Producto registrado con éxito'),
+          backgroundColor: const Color(0xFF005440),
+        ),
+      );
+      context.pop();
+    } on AppException catch (e) {
+      if (!mounted) return;
+      if (e.campo != null) {
+        setState(() => _erroresServicio[e.campo!] = e.message);
+      } else {
+        _mostrarError(e.message);
+      }
+    } catch (_) {
+      if (mounted) _mostrarError('No se pudo guardar el producto. Inténtalo de nuevo.');
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
   }
 
-  InputDecoration _inputDecoration(String label) {
+  void _mostrarError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje), backgroundColor: const Color(0xFFBA1A1A)),
+    );
+  }
+
+  Future<void> _eliminar() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text('¿Eliminar "${widget.product!.nombre}"? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await _service.deleteProduct(widget.product!.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Producto eliminado'), backgroundColor: Color(0xFF005440)),
+      );
+      context.pop();
+    } on AppException catch (e) {
+      if (mounted) _mostrarError(e.message);
+    }
+  }
+
+  InputDecoration _inputDecoration(String label, {String? campo}) {
     return InputDecoration(
       labelText: label,
+      errorText: campo == null ? null : _erroresServicio[campo],
+      errorMaxLines: 2,
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
@@ -86,25 +158,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           if (isEditing)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Eliminar producto'),
-                    content: Text('¿Eliminar "${widget.product!.nombre}"? Esta acción no se puede deshacer.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm != true) return;
-                await _service.deleteProduct(widget.product!.id);
-                if (mounted) context.pop();
-              },
+              tooltip: 'Eliminar producto',
+              onPressed: _eliminar,
             )
         ],
       ),
@@ -116,39 +171,36 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             children: [
               TextFormField(
                 controller: _skuController,
-                decoration: _inputDecoration("SKU o Código (ID)"),
+                decoration: _inputDecoration("SKU o Código (ID)", campo: 'sku'),
                 enabled: !isEditing, // Normalmente el ID no se edita después de creado
-                validator: (v) => v!.isEmpty ? "Campo obligatorio" : null,
+                validator: (v) => validarObligatorio(v, 'El SKU'),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nombreController,
-                decoration: _inputDecoration("Nombre del Producto"),
-                validator: (v) => v!.isEmpty ? "Campo obligatorio" : null,
+                decoration: _inputDecoration("Nombre del Producto", campo: 'nombre'),
+                validator: (v) => validarObligatorio(v, 'El nombre'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _precioController,
+                decoration: _inputDecoration("Precio de venta (S/)", campo: 'precio'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: validarPrecio,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _stockController,
-                decoration: _inputDecoration("Stock Actual"),
+                decoration: _inputDecoration("Stock Actual", campo: 'stock'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (v) {
-                  if (v!.isEmpty) return "Campo obligatorio";
-                  final n = double.tryParse(v);
-                  if (n == null) return "Debe ser un número válido";
-                  if (n < 0) return "El stock no puede ser negativo";
-                  return null;
-                },
+                validator: validarStock,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _umbralController,
-                decoration: _inputDecoration("Umbral de Alerta"),
+                decoration: _inputDecoration("Umbral de Alerta", campo: 'umbral'),
                 keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v!.isEmpty) return "Campo obligatorio";
-                  if (int.tryParse(v) == null) return "Debe ser un número entero válido";
-                  return null;
-                },
+                validator: validarUmbral,
               ),
               const SizedBox(height: 32),
             ],
@@ -189,7 +241,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
                   icon: const Icon(Icons.save, size: 20),
                   label: Text(isEditing ? "Actualizar" : "Guardar", style: const TextStyle(fontWeight: FontWeight.w600)),
-                  onPressed: _saveProduct,
+                  onPressed: _guardando ? null : _saveProduct,
                 ),
               ),
             ],

@@ -96,6 +96,21 @@ class DashboardAiService {
     }
   }
 
+  /// Más vendido y más rentable del mes indicado (CP-12).
+  Future<Map<String, dynamic>> getProductInsightsForMonth(int year, int month) async {
+    try {
+      final mostSold = await _dashboardRepo.getMostSoldProductByMonth(year, month);
+      final mostProfitable = await _dashboardRepo.getMostProfitableProductByMonth(year, month);
+      return {
+        'most_sold': mostSold ?? {},
+        'most_profitable': mostProfitable ?? {},
+        'error': null,
+      };
+    } catch (e) {
+      return {'most_sold': {}, 'most_profitable': {}, 'error': e.toString()};
+    }
+  }
+
   Future<Map<String, dynamic>> getLastMonthProductInsights() async {
     try {
       final now = DateTime.now();
@@ -133,22 +148,37 @@ class DashboardAiService {
     }
   }
 
+  /// Días con ventas que necesita un producto para estimar su demanda.
+  static const int minDiasHistorial = 17;
+
   // ==========================================================
   // 6. ML PAIR 1: CLASIFICACIÓN DE RIESGO DE INVENTARIO (HOLT-DRIVEN)
-  // Solo incluye los productos predecibles (historial >= 17 días de venta),
-  // mismo umbral que validateForecastAccuracy. Los demás se omiten.
+  // Solo clasifica los productos predecibles (historial >= 17 días de venta),
+  // mismo umbral que validateForecastAccuracy.
   // ==========================================================
   Future<List<Map<String, dynamic>>> getInventoryRiskClassification() async {
+    final report = await getInventoryRiskReport();
+    return List<Map<String, dynamic>>.from(report['items'] as List);
+  }
+
+  /// Igual que [getInventoryRiskClassification], pero además devuelve en
+  /// 'sin_historial' los productos que no tienen historial suficiente.
+  Future<Map<String, dynamic>> getInventoryRiskReport() async {
     try {
       final products = await _dashboardRepo.getAllProductsWithStock();
       final List<Map<String, dynamic>> results = [];
+      final List<Map<String, dynamic>> sinHistorial = [];
 
       for (final product in products) {
         final String productId = product['id'] as String;
         final double stock = (product['stock'] as num?)?.toDouble() ?? 0.0;
 
         final history = await _dashboardRepo.getRawSalesHistory(productId);
-        if (history.length < 17) continue; // no predecible, misma regla que validación
+        if (history.length < minDiasHistorial) {
+          // no predecible, misma regla que validación: se informa en lugar de estimar
+          sinHistorial.add({'id': productId, 'nombre': product['nombre'], 'dias_con_ventas': history.length});
+          continue;
+        }
 
         final List<double> historicalData =
             history.map((r) => (r['total_qty'] as num).toDouble()).toList();
@@ -185,6 +215,7 @@ class DashboardAiService {
           'stock': stock,
           'umbralAlerta': product['umbralAlerta'],
           'avg_daily_qty': avgPredictedDaily,
+          'weekly_demand': forecast.take(7).fold(0.0, (a, b) => a + b),
           'rotation_days': rotationDays.toInt(),
           'risk_level': riskLevel,
           'risk_score': riskScore,
@@ -198,10 +229,11 @@ class DashboardAiService {
         return (a['rotation_days'] as int).compareTo(b['rotation_days'] as int);
       });
 
-      return results;
+      sinHistorial.sort((a, b) => a['nombre'].toString().compareTo(b['nombre'].toString()));
+      return {'items': results, 'sin_historial': sinHistorial};
     } catch (e) {
-      print('Error en getInventoryRiskClassification: $e');
-      return [];
+      print('Error en getInventoryRiskReport: $e');
+      return {'items': <Map<String, dynamic>>[], 'sin_historial': <Map<String, dynamic>>[]};
     }
   }
 

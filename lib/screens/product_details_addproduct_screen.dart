@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../models/products_model.dart';
 import '../models/receipt_items_model.dart';
 import '../services/product_service.dart';
+import '../utils/validaciones.dart';
 
 class ProductSelectorModal extends StatefulWidget {
   final String receiptId;
@@ -152,7 +153,7 @@ class _ProductSelectorModalState extends State<ProductSelectorModal> {
                                 } else {
                                   _expandedProductId = product.id;
                                   _selectedQuantity = 1.0; // Resetea el contador
-                                  _costoController.text = ''; // Resetea el costo
+                                  _costoController.text = product.precio > 0 ? product.precio.toStringAsFixed(2) : ''; // Precio registrado como sugerencia
                                 }
                               });
                             },
@@ -161,7 +162,7 @@ class _ProductSelectorModalState extends State<ProductSelectorModal> {
                               style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF191C1D)),
                             ),
                             subtitle: Text(
-                              "SKU: ${product.id}",
+                              "SKU: ${product.id} · S/ ${product.precio.toStringAsFixed(2)}",
                               style: const TextStyle(color: Color(0xFF3F4944), fontSize: 12),
                             ),
                             trailing: Column(
@@ -251,7 +252,7 @@ class _ProductSelectorModalState extends State<ProductSelectorModal> {
                                 icon: const Icon(Icons.check, size: 18),
                                 label: const Text("Confirmar"),
                                 onPressed: () {
-                                  double costo = double.tryParse(_costoController.text) ?? 0.0;
+                                  double costo = parseDecimal(_costoController.text) ?? 0.0;
                                   if (costo <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(content: Text('Ingrese un costo unitario válido')),

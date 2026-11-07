@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../../services/dashboard_service.dart';
+import '../../services/conexion_service.dart';
+import '../../utils/mensajes_error.dart';
+import '../../widgets_global/sync_status_chip.dart';
 import '../../services/sync_service.dart';
 import '../../widgets_global/login_dialog.dart';
 import '../../widgets_global/dashboard/financial_balance_card.dart';
 import '../../widgets_global/dashboard/inventory_risk_section.dart';
-import '../../widgets_global/dashboard/featured_products_section.dart';
+import '../../widgets_global/dashboard/monthly_featured_products.dart';
 import '../../widgets_global/dashboard/provider_ranking_section.dart';
 import '../../widgets_global/dashboard/recent_movements_section.dart';
 import '../../widgets_global/dashboard/stock_alerts_section.dart';
@@ -21,7 +23,29 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isSyncing = false;
 
+  void _avisoError(String mensaje) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFBA1A1A),
+        behavior: SnackBarBehavior.floating,
+        content: Text(mensaje, style: const TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
+  /// Comprueba la conexión antes de una función en la nube; avisa si no hay.
+  Future<bool> _requiereConexion() async {
+    setState(() => _isSyncing = true);
+    final ok = await ConexionService.hayConexion();
+    if (!mounted) return false;
+    setState(() => _isSyncing = false);
+    if (!ok) _avisoError(mensajeSinConexion);
+    return ok;
+  }
+
   Future<void> _runBackup() async {
+    if (!await _requiereConexion()) return;
+    if (!mounted) return;
     if (AuthService.instance.currentUser == null) {
       final authenticated = await LoginDialog.show(context);
       if (!authenticated) return;
@@ -58,7 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final hora = '${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}';
                   return 'Backup exitoso · $fecha $hora · ${result.movementsSynced} movimiento${result.movementsSynced == 1 ? '' : 's'}';
                 }()
-              : 'Error al hacer backup: ${result.error}',
+              : (result.error ?? 'No se pudo completar el respaldo.'),
           style: const TextStyle(color: Colors.white),
         ),
       ),
@@ -66,6 +90,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _runRestore() async {
+    if (!await _requiereConexion()) return;
+    if (!mounted) return;
     if (AuthService.instance.currentUser == null) {
       final authenticated = await LoginDialog.show(context);
       if (!authenticated) return;
@@ -116,13 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFBA1A1A),
-          behavior: SnackBarBehavior.floating,
-          content: Text('Error al restaurar: ${result.error}', style: const TextStyle(color: Colors.white)),
-        ),
-      );
+      _avisoError(result.error ?? 'No se pudo restaurar el respaldo.');
     }
   }
 
@@ -168,29 +188,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(9999),
-              border: Border.all(color: const Color(0xFFC8E6C9)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  "Synced",
-                  style: TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
+          const SyncStatusChip(),
           IconButton(
             icon: _isSyncing
                 ? const SizedBox(
@@ -244,17 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const FinancialBalanceCard(),
             const SizedBox(height: 32),
 
-            FeaturedProductsSection(
-              title: "Productos Destacados",
-              future: DashboardAiService().getProductInsights(),
-            ),
-            const SizedBox(height: 32),
-
-            FeaturedProductsSection(
-              title: "Productos Destacados (Mes Pasado)",
-              future: DashboardAiService().getLastMonthProductInsights(),
-              emptyMessage: "No hay datos del mes anterior",
-            ),
+            const MonthlyFeaturedProducts(),
             const SizedBox(height: 32),
 
             const Text("Movimientos Recientes",

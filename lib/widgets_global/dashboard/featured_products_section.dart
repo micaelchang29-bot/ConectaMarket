@@ -5,12 +5,15 @@ class FeaturedProductsSection extends StatelessWidget {
   final String title;
   final Future<Map<String, dynamic>> future;
   final String emptyMessage;
+  /// Widget opcional bajo el título (por ejemplo, un selector de mes).
+  final Widget? encabezado;
 
   const FeaturedProductsSection({
     super.key,
     required this.title,
     required this.future,
     this.emptyMessage = "No hay datos de productos disponibles aún",
+    this.encabezado,
   });
 
   @override
@@ -23,6 +26,7 @@ class FeaturedProductsSection extends StatelessWidget {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF191C1D)),
         ),
         const SizedBox(height: 16),
+        if (encabezado != null) ...[encabezado!, const SizedBox(height: 16)],
         FutureBuilder<Map<String, dynamic>>(
           future: future,
           builder: (context, snapshot) {
@@ -36,7 +40,7 @@ class FeaturedProductsSection extends StatelessWidget {
                 borderColor: const Color(0xFFEF5350),
                 icon: Icons.error_outline,
                 iconColor: const Color(0xFFBA1A1A),
-                message: "Error cargando productos: ${snapshot.error}",
+                message: "No se pudieron cargar los productos destacados.",
                 textColor: const Color(0xFFBA1A1A),
               );
             }

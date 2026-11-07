@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart' show Share, XFile;
 import '../services/sunat_service.dart';
+import '../utils/mensajes_error.dart';
+import '../utils/validaciones.dart';
 import '../widgets_global/month_selector_widget.dart';
 
 class SunatExportScreen extends StatefulWidget {
@@ -39,10 +41,17 @@ class _SunatExportScreenState extends State<SunatExportScreen> {
     try {
       final path = await _service.exportToExcel(_year, _month);
       await Share.shareXFiles([XFile(path)]);
+    } on AppException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: const Color(0xFFBA1A1A)),
+          SnackBar(
+            content: Text(mensajeAmigable(e, porDefecto: 'No se pudo exportar el registro de ventas.')),
+            backgroundColor: const Color(0xFFBA1A1A),
+          ),
         );
       }
     } finally {
@@ -91,7 +100,9 @@ class _SunatExportScreenState extends State<SunatExportScreen> {
                     return const Center(child: CircularProgressIndicator(color: Color(0xFF0F6E56)));
                   }
                   if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Color(0xFFBA1A1A))));
+                    return const Center(
+                      child: Text('No se pudo cargar la vista previa.', style: TextStyle(color: Color(0xFFBA1A1A))),
+                    );
                   }
 
                   final rows = snapshot.data ?? [];
@@ -104,6 +115,11 @@ class _SunatExportScreenState extends State<SunatExportScreen> {
                           Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFFBEC9C3)),
                           SizedBox(height: 12),
                           Text('Sin ventas en este período', style: TextStyle(color: Color(0xFF3F4944))),
+                          SizedBox(height: 4),
+                          Text(
+                            'No hay datos para exportar.',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF6F7A74)),
+                          ),
                         ],
                       ),
                     );
